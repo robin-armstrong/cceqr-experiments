@@ -5,9 +5,10 @@ include("tcpqr_utils.jl")
 """
 tcpqr!(A; k = minimum(size(A)), mu = .9)
 
-Compute the first `k` entries of the column permutation for act CPQR factorization
+Compute the first `k` entries of the column permutation for a CPQR factorization
 of `A`, modifying `A` in place. Use thresholded updates with relative threshold `mu`.
-See also `tcpqr`.
+Returns the column permutation, the number of cycles used, the average pivoting block
+size per cycle, and the final size of the active set. See also `tcpqr`.
 """
 function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9)
     m, n = size(A)
@@ -28,7 +29,7 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .
     V     = zeros(m, k)      # storage for Householder reflectors
     T     = zeros(k, k)      # storage for T factor in compact WY representation
 
-    tmpcol = zeros(m)
+    avg_block = 0.
 
     # determine column norms
 
@@ -50,7 +51,8 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .
 
         # select a block from the active set to factorize
 
-        b = reblock!(A, jpvt, skel+1, act, gamma, delta)
+        b          = reblock!(A, jpvt, skel+1, act, gamma, delta)
+        avg_block += b
         (cycle == 1) && (act = b)
 
         # factorize candidate columns with DGEQP3
@@ -150,14 +152,18 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .
         skel += t
     end
 
-    return jpvt[1:k]
+    avg_block /= cycle
+
+    return jpvt[1:k], cycle, avg_block, act
 end
 
 """
 tcpqr(A; k = minimum(size(A)), mu = .9)
 
-Compute the first `k` entries of the column permutation for act CPQR factorization of `A`,
-using thresholded updates with relative threshold `mu`. See also `tcpqr!`.
+Compute the first `k` entries of the column permutation for a CPQR factorization of `A`,
+using thresholded updates with relative threshold `mu`. Returns the column permutation,
+the number of cycles used, the average pivoting block size per cycle, and the final size
+of the active set. See also `tcpqr!`.
 """
 function tcpqr(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9)
     return tcpqr!(deepcopy(A); k = k, mu = mu)

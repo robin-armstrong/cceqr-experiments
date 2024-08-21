@@ -1,5 +1,7 @@
 using LinearAlgebra
 
+### Fills the (1:q, p:q) block of T for compact WY form using the Schreiber-van Loan algorithm.
+
 function fill_t!(T::AbstractMatrix{Float64}, V::Matrix{Float64}, tau::Vector{Float64}, p::Int64, q::Int64)
     # filling the (p:q, p:q) block of T
     for s = 1:(q-p+1)
@@ -31,6 +33,9 @@ function fill_t!(T::AbstractMatrix{Float64}, V::Matrix{Float64}, tau::Vector{Flo
     end
 end
 
+### Applies Qt to the (p:q, r:s) block of A, where Qt is defined by the p-th through q-th Householder reflectors
+### in the compact WY form given by V and T.
+
 function apply_qt!(A::Matrix{Float64}, V::Matrix{Float64}, T::Matrix{Float64}, p::Int64, q::Int64, r::Int64, s::Int64)
     m, n  = size(A)
     A1    = view(A, p:q, r:s)
@@ -46,6 +51,9 @@ function apply_qt!(A::Matrix{Float64}, V::Matrix{Float64}, T::Matrix{Float64}, p
     mul!(A1, V1, W', -1., 1.)
     mul!(A2, V2, W', -1., 1.)
 end
+
+### Loops through the (:, j_start:j_end) block of A and pivots all columns with gamma[j] > delta to the front of the block.
+### Pivots are kept track of by modifying jpvt and gamma.
 
 function reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end::Int64, gamma::Vector{Float64}, delta::Float64)
     m, n   = size(A)
@@ -73,6 +81,8 @@ function reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end
 
     return blk
 end
+
+### Applies column permutation "perm" to the (:, j0:(j0+length(perm)-1)) block of A, modifying jpvt and gamma accordingly.
 
 function swap_cols!(A::Matrix{Float64}, jpvt::Vector{Int64}, gamma::Vector{Float64}, j0::Int64, perm::Vector{Int64})
     n = size(A, 2)
