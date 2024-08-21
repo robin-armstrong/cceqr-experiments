@@ -1,0 +1,10 @@
+*.pdf
+*.png
+*.svg
+*.jld2
+*.txt
+*.sub
+*.out
+clean.sh
+.DS_Store
+
