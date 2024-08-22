@@ -52,8 +52,8 @@ function apply_qt!(A::Matrix{Float64}, V::Matrix{Float64}, T::Matrix{Float64}, p
     mul!(A2, V2, W', -1., 1.)
 end
 
-### Loops through the (:, j_start:j_end) block of A and pivots all columns with gamma[j] > delta to the front of the block.
-### Pivots are kept track of by modifying jpvt and gamma.
+### Loops through the (:, j_start:j_end) block of A and moves all columns to the front that have squared norm exceeding threshold
+### delta. Modifies jpvt and gamma accordingly. Returns the number of columns that passed the threshold.
 
 function reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end::Int64, gamma::Vector{Float64}, delta::Float64)
     m, n   = size(A)
