@@ -5,6 +5,7 @@ using PyPlot
 using JLD2
 
 include("../../algorithms/tcpqr.jl")
+include("../../algorithms/rpchol.jl")
 
 ##########################################################################
 ######################## SCRIPT PARAMETERS ###############################
@@ -19,17 +20,16 @@ srange = range(1, 10, 10)   # cluster separation values
 
 kernel           = "inv-1"  # type of kernel function      
 bandwidth        = 1.       # bandwidth of kernel function
-kernel_blocksize = 20000    # used for computing kernel matrix eigenvectors, should be a divisor of k*n
 
-mu               = 0.9      # controls threshold value for TCPQR
-numtrials        = 100      # algorithm trials per separation value
+mu        = 0.9         # controls threshold value for TCPQR
+numtrials = 1         # algorithm trials per separation value
 
 plot_only           = false     # if "true" then data will be read from disk and not regenerated
-generate_embeddings = true      # if "true" then embeddings will be calculated from scratch, otherwise read from disk
-embedding_name      = "src/experiments/spectral_clustering/huge_embeddings.jld2"
+generate_embeddings = true     # if "true" then embeddings will be calculated from Vt, otherwise read from disk
+embedding_name      = "src/experiments/spectral_clustering/cholesky_embeddings.jld2"
 
-destination = "src/experiments/spectral_clustering/hugetest"
-readme      = "Comparing algorithm performance on a GIGANTIC example!"
+destination = "src/experiments/spectral_clustering/hugetest_3"
+readme      = "Testing out the Cholesky-based eigenvector estimation algorithm."
 
 ##########################################################################
 ######################## DATA GENERATION #################################
@@ -43,82 +43,10 @@ if(!plot_only)
         flush(stdout)
     end
 
-    function kernel_product!(X, Y, data, s, sqnorms, kernel, bandwidth, kernel_blocksize, tmp)
-        n = size(data, 2)
-        p = size(X, 2)
-
-        if(n % kernel_blocksize != 0)
-            throw(error("number of data points must be a multiple of the kernel_blocksize"))
-        elseif(size(Y) != (n, p))
-            throw(error("incorrect dimensions for product matrix"))
-        end
-
-        if(kernel == "gaussian")
-            kfunc = x -> exp(-.5*(x/bandwidth)^2/d)
-        elseif(kernel == "laplace")
-            kfunc = x -> exp(-x/(sqrt(d)*bandwidth))
-        elseif(kernel == "inv-1")
-            kfunc = x -> sqrt(d)/(1 + x/bandwidth)
-        elseif(kernel == "inv-2")
-            kfunc = x -> d/(1 + (x/bandwidth)^2)
-        else
-            throw(ArgumentError("unrecognized kernel '"*kernel*"'"))
-        end
-
-        nblocks = div(n, kernel_blocksize)
-        e1      = ones(n)
-        e2      = ones(kernel_blocksize)
-        fill!(Y, 0.)
-        
-        for i = 1:nblocks
-            fprintln("            KERNEL PRODUCT: block "*string(i)*" of "*string(nblocks))
-            # constructing columns kernel_blocksize*(i - 1) + 1 through kernel_blocksize*i of the kernel evaluation matrix, storing to tmp
-            fill!(tmp, 0.)
-
-            block     = (kernel_blocksize*(i - 1) + 1):(kernel_blocksize*i)
-            tmp[:,:] += sqnorms[s, :]*e2'
-            tmp[:,:] += e1*sqnorms[s, block]'
-            tmp[:,:] -= 2*data'*data[:, block]
-
-            broadcast!(abs, tmp, tmp)
-            broadcast!(sqrt, tmp, tmp)
-            broadcast!(kfunc, tmp, tmp)
-
-            # computing a set of kernel_blocksize outer products that contribute to the final matrix-matrix product
-            Y[:, :] += tmp*X[block, :]
-        end
-    end
-
-    function kernel_rsvd!(rng, data, s, sqnorms, kernel, bandwidth, kernel_blocksize, p, q, V, tmp1, tmp2)
-        n = size(data, 2)
-
-        # sketching
-        copy!(tmp1, randn(rng, n, p))
-        
-        for i = 1:q
-            fprintln("        RSVD: kernel product for power iteration "*string(i))
-            kernel_product!(tmp1, V, data, s, sqnorms, kernel, bandwidth, kernel_blocksize, tmp2)
-            qrobj = qr!(V)
-
-            # writing the orthogonalized sketch to scratch2
-            fill!(tmp1, 0.)
-            for i = 1:p tmp1[i, i] = 1. end
-            lmul!(qrobj.Q, tmp1)
-        end
-
-        # projection, then SVD
-        fprintln("        RSVD: final kernel product")
-        kernel_product!(tmp1, V, data, s, sqnorms, kernel, bandwidth, kernel_blocksize, tmp2)
-        V_small, _, _ = svd(tmp1'*V)
-
-        mul!(V, tmp1, V_small)
-    end
-
-    function run_experiment(rng, d, k, n, srange, kernel, bandwidth, kernel_blocksize, mu, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
+    function run_experiment(rng, d, k, n, srange, kernel, bandwidth, mu, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
         if(generate_embeddings)
-            V           = zeros(k*n, k + 10)
-            tmp1        = zeros(k*n, k + 10)
-            tmp2        = zeros(k*n, kernel_blocksize)
+            X           = zeros(k*n, 2*k)
+            tmp         = zeros(k*n, 2*k)
             data        = zeros(d, k*n)
             embedding   = zeros(k, k*n, length(srange))
             sqnorms     = zeros(length(srange), k*n)
@@ -135,7 +63,6 @@ if(!plot_only)
         logstr *= "srange              = "*string(srange)*"\n"
         logstr *= "kernel              = "*kernel*"\n"
         logstr *= "bandwidth           = "*string(bandwidth)*"\n"
-        logstr *= "kernel_blocksize    = "*string(kernel_blocksize)*"\n"
         logstr *= "mu                  = "*string(mu)*"\n"
         logstr *= "numtrials           = "*string(numtrials)*"\n"
         logstr *= "generate_embeddings = "*string(generate_embeddings)*"\n"
@@ -158,7 +85,7 @@ if(!plot_only)
         col_imbalance = zeros(length(srange))
         avg_angle     = zeros(length(srange))
         cluster_skill = zeros(length(srange))
-        scratch       = zeros(k, k*n)
+        Vt            = zeros(k, k*n)
 
         for s = 1:length(srange)
             fprintln("   SCALE FACTOR "*string(s)*" of "*string(length(srange)))
@@ -179,9 +106,29 @@ if(!plot_only)
 
                 fprintln("   estimating kernel matrix eigenvectors...")
 
-                kernel_rsvd!(rng, data, s, sqnorms, kernel, bandwidth, kernel_blocksize, k + 10, 3, V, tmp1, tmp2)
+                if kernel == "gaussian"
+                    kfunc = x -> exp(-.5*(x/bandwidth)^2/d)
+                elseif kernel == "laplace"
+                    kfunc = x -> exp(-x/(sqrt(d)*bandwidth))
+                elseif kernel == "inv-1"
+                    kfunc = x -> sqrt(d)/(1 + x/bandwidth)
+                elseif kernel == "inv-2"
+                    kfunc = x -> d/(1 + (x/bandwidth)^2)
+                else
+                    throw(ArgumentError("unrecognized kernel '"*kernel*"'"))
+                end
 
-                embedding[:, :, s] = V[:, 1:k]'
+                fill!(X, 0.)
+                fill!(tmp, 0.)
+
+                # rank-2k approximation using randomly pivoted partial Cholesky
+                rpchol!(rng, 2*k, data, kfunc, X)
+
+                # approximate eigenvalue decomposition
+                svdobj = svd(X'*X)
+                mul!(tmp, X, svdobj.V)
+                rmul!(tmp, inv(Diagonal(sqrt.(svdobj.S))))
+                embedding[:, :, s] = tmp[:, 1:k]'
 
                 fprintln("\n   measuring column norms...")
 
@@ -197,10 +144,10 @@ if(!plot_only)
             fprintln("   running CPQR clustering...")
             
             # precompiling CPQR algorithms
-            copy!(scratch, embedding[:, :, s])
-            p_geqp3 = qr!(scratch, ColumnNorm()).p[1:k]
-            copy!(scratch, embedding[:, :, s])
-            p_tcpqr, blocks, avg_b, act = tcpqr!(scratch, mu = mu)
+            copy!(Vt, embedding[:, :, s])
+            p_geqp3 = qr!(Vt, ColumnNorm()).p[1:k]
+            copy!(Vt, embedding[:, :, s])
+            p_tcpqr, blocks, avg_b, act = tcpqr!(Vt, mu = mu)
 
             # making sure the "homemade" CPQRs are giving the right results
 
@@ -211,7 +158,8 @@ if(!plot_only)
                 expected = p_geqp3[j]
                 got      = p_tcpqr[j]
 
-                @save destination*"_failure_data.jld2" embedding j expected got
+                copy!(Vt, embedding[:, :, s])
+                @save destination*"_failure_data.jld2" Vt j expected got
                 throw(error("incorrect permutation from tcpqr"))
             end
 
@@ -224,11 +172,11 @@ if(!plot_only)
             Q      = svdobj.U*svdobj.Vt
 
             # measuring angles between embedded data and cone centers
-            mul!(scratch, Q', embedding[:, :, s])
-            rmul!(scratch, Diagonal(sqnorms[s, :].^(-.5)))
+            mul!(Vt, Q', embedding[:, :, s])
+            rmul!(Vt, Diagonal(sqnorms[s, :].^(-.5)))
 
             # classifying the data
-            labels = argmax(abs.(scratch), dims = 1)
+            labels = argmax(abs.(Vt), dims = 1)
 
             fprintln("   finding learned/true label correspondence...")
             
@@ -253,7 +201,7 @@ if(!plot_only)
 
             for i = 1:(k*n)
                 l             = labels[i][1]
-                avg_angle[s] += acos(abs(scratch[l, i]))
+                avg_angle[s] += acos(abs(Vt[l, i]))
                 
                 if(label_perm[l] == true_labels[s, i]) cluster_skill[s] += 1 end
             end
@@ -266,12 +214,12 @@ if(!plot_only)
             for trial = 1:numtrials
                 fprintln("       trial "*string(trial)*" of "*string(numtrials)*"...")
 
-                copy!(scratch, embedding[:, :, s])
-                t = @elapsed qr!(scratch, ColumnNorm())
+                copy!(Vt, embedding[:, :, s])
+                t = @elapsed qr!(Vt, ColumnNorm())
                 geqp3_time[s, trial] = t
 
-                copy!(scratch, embedding[:, :, s])
-                t = @elapsed tcpqr!(scratch, mu = mu)
+                copy!(Vt, embedding[:, :, s])
+                t = @elapsed tcpqr!(Vt, mu = mu)
                 tcpqr_time[s, trial] = t
             end
 
@@ -281,7 +229,7 @@ if(!plot_only)
         end
     end
 
-    run_experiment(rng, d, k, n, srange, kernel, bandwidth, kernel_blocksize, mu, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
+    run_experiment(rng, d, k, n, srange, kernel, bandwidth, mu, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
 end
 
 ##########################################################################
