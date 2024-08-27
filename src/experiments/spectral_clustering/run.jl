@@ -11,25 +11,25 @@ include("../../algorithms/rpchol.jl")
 ######################## SCRIPT PARAMETERS ###############################
 ##########################################################################
 
-rng = MersenneTwister(1)
+rng = MersenneTwister(2)
 
 d      = 100                # data dimension
 k      = 20                 # number of mixture components, should be less than d
 n      = 20000              # k*n samples will be drawn from the mixture
 srange = range(1, 10, 10)   # cluster separation values
 
-kernel           = "inv-1"  # type of kernel function      
-bandwidth        = 1.       # bandwidth of kernel function
+kernel    = "inv-1"     # type of kernel function      
+bandwidth = 1.          # bandwidth of kernel function
 
 mu        = 0.9         # controls threshold value for TCPQR
-numtrials = 1         # algorithm trials per separation value
+numtrials = 100         # algorithm trials per separation value
 
 plot_only           = false     # if "true" then data will be read from disk and not regenerated
-generate_embeddings = true     # if "true" then embeddings will be calculated from Vt, otherwise read from disk
-embedding_name      = "src/experiments/spectral_clustering/cholesky_embeddings.jld2"
+generate_embeddings = false     # if "true" then embeddings will be calculated from Vt, otherwise read from disk
+embedding_name      = "src/experiments/spectral_clustering/embeddings.jld2"
 
-destination = "src/experiments/spectral_clustering/hugetest_3"
-readme      = "Testing out the Cholesky-based eigenvector estimation algorithm."
+destination = "src/experiments/spectral_clustering/tcpqr_test"
+readme      = "Testing TCPQR on very large clustering problems."
 
 ##########################################################################
 ######################## DATA GENERATION #################################
@@ -147,7 +147,7 @@ if(!plot_only)
             copy!(Vt, embedding[:, :, s])
             p_geqp3 = qr!(Vt, ColumnNorm()).p[1:k]
             copy!(Vt, embedding[:, :, s])
-            p_tcpqr, blocks, avg_b, act = tcpqr!(Vt, mu = mu)
+            p_tcpqr, blocks, avg_b, act = tcpqr!(rng, Vt, mu = mu)
 
             # making sure the "homemade" CPQRs are giving the right results
 
@@ -219,7 +219,7 @@ if(!plot_only)
                 geqp3_time[s, trial] = t
 
                 copy!(Vt, embedding[:, :, s])
-                t = @elapsed tcpqr!(Vt, mu = mu)
+                t = @elapsed tcpqr!(rng, Vt, mu = mu)
                 tcpqr_time[s, trial] = t
             end
 

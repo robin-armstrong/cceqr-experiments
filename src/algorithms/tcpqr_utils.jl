@@ -82,6 +82,36 @@ function reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end
     return blk
 end
 
+function random_reblock!(rng::AbstractRNG, A::Matrix{Float64}, jpvt::Vector{Int64}, gamma::Vector{Float64}, j0::Int64, r::Int64)
+    m, n   = size(A)
+    tmpcol = zeros(m)
+    w      = Weights(view(gamma, j0:n))
+    ran    = 1:(n-j0+1)
+
+    for i = 1:r
+        s = i-1
+
+        while s < i
+            s = sample(rng, ran, w)
+        end
+
+        j = j0+i-1
+        p = j0+s-1
+
+        tmp     = jpvt[p]
+        jpvt[p] = jpvt[j]
+        jpvt[j] = tmp
+
+        tmp      = gamma[p]
+        gamma[p] = gamma[j]
+        gamma[j] = tmp
+
+        tmpcol[:] = A[:,p]
+        A[:,p]    = A[:,j]
+        A[:,j]    = tmpcol
+    end
+end
+
 ### Applies column permutation "perm" to the (:, j0:(j0+length(perm)-1)) block of A, modifying jpvt and gamma accordingly.
 
 function swap_cols!(A::Matrix{Float64}, jpvt::Vector{Int64}, gamma::Vector{Float64}, j0::Int64, perm::Vector{Int64})

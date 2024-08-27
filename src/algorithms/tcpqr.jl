@@ -1,16 +1,18 @@
 using LinearAlgebra
+using StatsBase
+using Random
 
 include("tcpqr_utils.jl")
 
 """
-tcpqr!(A; k = minimum(size(A)), mu = .9)
+tcpqr!([rng], A; k = minimum(size(A)), mu = .9, rho = .05)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
 of `A`, modifying `A` in place. Use thresholded updates with relative threshold `mu`.
 Returns the column permutation, the number of cycles used, the average pivoting block
 size per cycle, and the final size of the active set. See also `tcpqr`.
 """
-function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9)
+function tcpqr!(rng::AbstractRNG, A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9, rho::Float64 = .01)
     m, n = size(A)
 
     if k < 1 
@@ -18,6 +20,8 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .
     elseif k > min(m, n)
         throw(ArgumentError("k cannot exceed the smaller dimension of the input matrix"))
     elseif mu*(1 - mu) <= 0
+        throw(ArgumentError("mu must lie strictly between 0 and 1"))
+    elseif rho*(1 - rho) <= 0
         throw(ArgumentError("mu must lie strictly between 0 and 1"))
     end
 
@@ -91,57 +95,53 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .
         apply_qt!(A, V, T, skel+1, skel+t, skel+1, act)
 
         # determine a lower bound on the maximum column norm orthogonal
-        # to the range of A[:, 1:(skel+t)]
+        # to the range of A[:, 1:(skel+t)], starting by measuring residual
+        # norms in the block we just factorized.
 
-        if skel+t == act
-            # in this case, the entire active set is now in the skeleton,
-            # and we must update the norm of a non-active column 
-
-            j     = skel+t+1                      # first non-active index
-            col   = reshape(A[:, j], (m, 1))
-            lower = norm(col[(skel+t+1):m])^2
-        else
-            lower = 0.
-            
-            for j = (skel+t+1):act
-                col      = view(A, (skel+t+1):m, j)
-                gamma[j] = norm(col)^2
-                lower    = max(lower, gamma[j])
-            end
+        lower = 0.
+        
+        for j = (skel+t+1):act
+            col      = view(A, (skel+t+1):m, j)
+            gamma[j] = norm(col)^2
+            lower    = max(lower, gamma[j])
         end
 
-        # bring new columns into the active set and apply reflectors.
+        # randomly choosing a small set of new columns to make active
 
-        act_old = act
-        act    += reblock!(A, jpvt, act_old+1, n, gamma, mu*lower)
+        r = floor(Int64, rho*(n-act))
 
-        if act > act_old
-            apply_qt!(A, V, T, 1, skel+t, act_old+1, act)
+        (r > 0) && random_reblock!(rng, A, jpvt, gamma, act+1, r)
+        (r > 0) && apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
+
+        for j = (act+1):(act+r)
+            col      = view(A, (skel+t+1):m, j)
+            gamma[j] = norm(col)^2
+            lower    = max(lower, gamma[j])
         end
+
+        act += r
+
+        # deciding which remaining columns to bring into the active set
+
+        r = reblock!(A, jpvt, act+1, n, gamma, mu*lower)
 
         # update residual column norms
-        for j = (act_old+1):act
+
+        if r > 0
+            apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
+        end
+
+        for j = (act+1):(act+r)
             col       = view(A, 1:(skel+t), j)
             gamma[j] -= norm(col)^2
             lower     = max(lower, gamma[j])
         end
 
+        act  += r
         skel += t
     end
 
     avg_block /= cycle
 
     return jpvt[1:k], cycle, avg_block, act
-end
-
-"""
-tcpqr(A; k = minimum(size(A)), mu = .9)
-
-Compute the first `k` entries of the column permutation for a CPQR factorization of `A`,
-using thresholded updates with relative threshold `mu`. Returns the column permutation,
-the number of cycles used, the average pivoting block size per cycle, and the final size
-of the active set. See also `tcpqr!`.
-"""
-function tcpqr(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9)
-    return tcpqr!(deepcopy(A); k = k, mu = mu)
 end
