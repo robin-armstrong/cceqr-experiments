@@ -1,4 +1,6 @@
 using LinearAlgebra
+using StatsBase
+using Random
 
 ### Fills the (1:q, p:q) block of T for compact WY form using the Schreiber-van Loan algorithm.
 
@@ -55,7 +57,7 @@ end
 ### Loops through the (:, j_start:j_end) block of A and moves all columns to the front that have squared norm exceeding threshold
 ### delta. Modifies jpvt and gamma accordingly. Returns the number of columns that passed the threshold.
 
-function reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end::Int64, gamma::Vector{Float64}, delta::Float64)
+function threshold_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end::Int64, gamma::Vector{Float64}, delta::Float64)
     m, n   = size(A)
     tmpcol = zeros(m)
     blk    = 0
@@ -82,21 +84,17 @@ function reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end
     return blk
 end
 
-function random_reblock!(rng::AbstractRNG, A::Matrix{Float64}, jpvt::Vector{Int64}, gamma::Vector{Float64}, j0::Int64, r::Int64)
+### Loops through the (:, j0:end) block of A and moves r columns to the front, corresponding to the columns
+### with the highest value or gamma. Modifies jpvt and gamma accordingly.
+
+function order_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, gamma::Vector{Float64}, j0::Int64, r::Int64)
     m, n   = size(A)
     tmpcol = zeros(m)
-    w      = Weights(view(gamma, j0:n))
-    ran    = 1:(n-j0+1)
+    samp   = partialsortperm(view(gamma, j0:n), 1:r, rev = true)
 
     for i = 1:r
-        s = i-1
-
-        while s < i
-            s = sample(rng, ran, w)
-        end
-
+        p = j0+samp[i]-1
         j = j0+i-1
-        p = j0+s-1
 
         tmp     = jpvt[p]
         jpvt[p] = jpvt[j]

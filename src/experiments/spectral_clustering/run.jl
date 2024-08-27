@@ -22,10 +22,11 @@ kernel    = "inv-1"     # type of kernel function
 bandwidth = 1.          # bandwidth of kernel function
 
 mu        = 0.9         # controls threshold value for TCPQR
+rho       = 1e-4        # controls selection of columns for Householder reflection
 numtrials = 100         # algorithm trials per separation value
 
 plot_only           = false     # if "true" then data will be read from disk and not regenerated
-generate_embeddings = false     # if "true" then embeddings will be calculated from Vt, otherwise read from disk
+generate_embeddings = true      # if "true" then embeddings will be calculated from Vt, otherwise read from disk
 embedding_name      = "src/experiments/spectral_clustering/embeddings.jld2"
 
 destination = "src/experiments/spectral_clustering/tcpqr_test"
@@ -43,7 +44,7 @@ if(!plot_only)
         flush(stdout)
     end
 
-    function run_experiment(rng, d, k, n, srange, kernel, bandwidth, mu, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
+    function run_experiment(rng, d, k, n, srange, kernel, bandwidth, mu, rho, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
         if(generate_embeddings)
             X           = zeros(k*n, 2*k)
             tmp         = zeros(k*n, 2*k)
@@ -64,6 +65,7 @@ if(!plot_only)
         logstr *= "kernel              = "*kernel*"\n"
         logstr *= "bandwidth           = "*string(bandwidth)*"\n"
         logstr *= "mu                  = "*string(mu)*"\n"
+        logstr *= "rho                 = "*string(rho)*"\n"
         logstr *= "numtrials           = "*string(numtrials)*"\n"
         logstr *= "generate_embeddings = "*string(generate_embeddings)*"\n"
         logstr *= "embedding_name      = "*embedding_name*"\n"
@@ -147,7 +149,7 @@ if(!plot_only)
             copy!(Vt, embedding[:, :, s])
             p_geqp3 = qr!(Vt, ColumnNorm()).p[1:k]
             copy!(Vt, embedding[:, :, s])
-            p_tcpqr, blocks, avg_b, act = tcpqr!(rng, Vt, mu = mu)
+            p_tcpqr, blocks, avg_b, act = tcpqr!(Vt, mu = mu, rho = rho)
 
             # making sure the "homemade" CPQRs are giving the right results
 
@@ -219,7 +221,7 @@ if(!plot_only)
                 geqp3_time[s, trial] = t
 
                 copy!(Vt, embedding[:, :, s])
-                t = @elapsed tcpqr!(rng, Vt, mu = mu)
+                t = @elapsed tcpqr!(Vt, mu = mu, rho = rho)
                 tcpqr_time[s, trial] = t
             end
 
@@ -229,7 +231,7 @@ if(!plot_only)
         end
     end
 
-    run_experiment(rng, d, k, n, srange, kernel, bandwidth, mu, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
+    run_experiment(rng, d, k, n, srange, kernel, bandwidth, mu, rho, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
 end
 
 ##########################################################################

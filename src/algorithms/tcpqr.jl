@@ -1,18 +1,16 @@
 using LinearAlgebra
-using StatsBase
-using Random
 
 include("tcpqr_utils.jl")
 
 """
-tcpqr!([rng], A; k = minimum(size(A)), mu = .9, rho = .05)
+tcpqr!([rng], A; k = minimum(size(A)), mu = .9, rho = .005)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
 of `A`, modifying `A` in place. Use thresholded updates with relative threshold `mu`.
 Returns the column permutation, the number of cycles used, the average pivoting block
 size per cycle, and the final size of the active set. See also `tcpqr`.
 """
-function tcpqr!(rng::AbstractRNG, A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9, rho::Float64 = .01)
+function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9, rho::Float64 = .005)
     m, n = size(A)
 
     if k < 1 
@@ -55,7 +53,7 @@ function tcpqr!(rng::AbstractRNG, A::Matrix{Float64}; k::Int64 = minimum(size(A)
 
         # select a block from the active set to factorize
 
-        b          = reblock!(A, jpvt, skel+1, act, gamma, delta)
+        b          = threshold_reblock!(A, jpvt, skel+1, act, gamma, delta)
         avg_block += b
         (cycle == 1) && (act = b)
 
@@ -109,8 +107,7 @@ function tcpqr!(rng::AbstractRNG, A::Matrix{Float64}; k::Int64 = minimum(size(A)
         # randomly choosing a small set of new columns to make active
 
         r = floor(Int64, rho*(n-act))
-
-        (r > 0) && random_reblock!(rng, A, jpvt, gamma, act+1, r)
+        (r > 0) && order_reblock!(A, jpvt, gamma, act+1, r)
         (r > 0) && apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
 
         for j = (act+1):(act+r)
@@ -123,7 +120,7 @@ function tcpqr!(rng::AbstractRNG, A::Matrix{Float64}; k::Int64 = minimum(size(A)
 
         # deciding which remaining columns to bring into the active set
 
-        r = reblock!(A, jpvt, act+1, n, gamma, mu*lower)
+        r = threshold_reblock!(A, jpvt, act+1, n, gamma, mu*lower)
 
         # update residual column norms
 
