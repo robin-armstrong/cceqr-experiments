@@ -3,24 +3,24 @@ using LinearAlgebra
 include("tcpqr_utils.jl")
 
 """
-tcpqr!([rng], A; k = minimum(size(A)), mu = .9, rho = .005)
+tcpqr!(A; k = minimum(size(A)), eta = .9, rho = 1e-4)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
-of `A`, modifying `A` in place. Use thresholded updates with relative threshold `mu`.
+of `A`, modifying `A` in place. Use thresholded updates with relative threshold `eta`.
 Returns the column permutation, the number of cycles used, the average pivoting block
 size per cycle, and the final size of the active set. See also `tcpqr`.
 """
-function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .9, rho::Float64 = .005)
+function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), eta::Float64 = .9, rho::Float64 = 1e-4)
     m, n = size(A)
 
     if k < 1 
         throw(ArgumentError("k must be a positive integer"))
     elseif k > min(m, n)
         throw(ArgumentError("k cannot exceed the smaller dimension of the input matrix"))
-    elseif mu*(1 - mu) <= 0
-        throw(ArgumentError("mu must lie strictly between 0 and 1"))
+    elseif eta*(1 - eta) <= 0
+        throw(ArgumentError("eta must lie strictly between 0 and 1"))
     elseif rho*(1 - rho) <= 0
-        throw(ArgumentError("mu must lie strictly between 0 and 1"))
+        throw(ArgumentError("eta must lie strictly between 0 and 1"))
     end
 
     gamma = zeros(n)         # residual column norms
@@ -49,7 +49,7 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .
 
     while skel < k
         cycle += 1
-        delta  = mu*lower
+        delta  = eta*lower
 
         # select a block from the active set to factorize
 
@@ -120,7 +120,7 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), mu::Float64 = .
 
         # deciding which remaining columns to bring into the active set
 
-        r = threshold_reblock!(A, jpvt, act+1, n, gamma, mu*lower)
+        r = threshold_reblock!(A, jpvt, act+1, n, gamma, eta*lower)
 
         # update residual column norms
 
