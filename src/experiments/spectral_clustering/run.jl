@@ -4,7 +4,7 @@ using Random
 using PyPlot
 using JLD2
 
-include("../../algorithms/tcpqr.jl")
+include("../../algorithms/cceqr.jl")
 include("../../algorithms/rpchol.jl")
 
 ##########################################################################
@@ -21,7 +21,7 @@ srange = range(1, 10, 10)   # cluster separation values
 kernel    = "inv-1"     # type of kernel function      
 bandwidth = 1.          # bandwidth of kernel function
 
-eta       = 0.9         # controls threshold value for TCPQR
+eta       = 0.9         # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
 numtrials = 100         # algorithm trials per separation value
 
@@ -29,8 +29,8 @@ plot_only           = false     # if "true" then data will be read from disk and
 generate_embeddings = true      # if "true" then embeddings will be calculated from Vt, otherwise read from disk
 embedding_name      = "src/experiments/spectral_clustering/embeddings.jld2"
 
-destination = "src/experiments/spectral_clustering/tcpqr_test"
-readme      = "Testing TCPQR on very large clustering problems."
+destination = "src/experiments/spectral_clustering/cceqr_test"
+readme      = "Testing CCEQR on very large clustering problems."
 
 ##########################################################################
 ######################## DATA GENERATION #################################
@@ -79,10 +79,10 @@ if(!plot_only)
 
         fprintln(logstr)
 
-        tcpqr_time    = zeros(length(srange), numtrials)
-        tcpqr_cycles  = zeros(length(srange))
-        tcpqr_avgblk  = zeros(length(srange))
-        tcpqr_active  = zeros(length(srange))
+        cceqr_time    = zeros(length(srange), numtrials)
+        cceqr_cycles  = zeros(length(srange))
+        cceqr_avgblk  = zeros(length(srange))
+        cceqr_active  = zeros(length(srange))
         geqp3_time    = zeros(length(srange), numtrials)
         col_imbalance = zeros(length(srange))
         avg_angle     = zeros(length(srange))
@@ -149,25 +149,25 @@ if(!plot_only)
             copy!(Vt, embedding[:, :, s])
             p_geqp3 = qr!(Vt, ColumnNorm()).p[1:k]
             copy!(Vt, embedding[:, :, s])
-            p_tcpqr, blocks, avg_b, act = tcpqr!(Vt, eta = eta, rho = rho)
+            p_cceqr, blocks, avg_b, act = cceqr!(Vt, eta = eta, rho = rho)
 
             # making sure the "homemade" CPQRs are giving the right results
 
-            if(p_geqp3[1:k] != p_tcpqr)
+            if(p_geqp3[1:k] != p_cceqr)
                 j = 1
-                while(p_geqp3[j] == p_tcpqr[j]) j += 1 end
+                while(p_geqp3[j] == p_cceqr[j]) j += 1 end
 
                 expected = p_geqp3[j]
-                got      = p_tcpqr[j]
+                got      = p_cceqr[j]
 
                 copy!(Vt, embedding[:, :, s])
                 @save destination*"_failure_data.jld2" Vt j expected got
-                throw(error("incorrect permutation from tcpqr"))
+                throw(error("incorrect permutation from cceqr"))
             end
 
-            tcpqr_cycles[s] = blocks
-            tcpqr_avgblk[s] = avg_b/(k*n)
-            tcpqr_active[s] = act/(k*n)
+            cceqr_cycles[s] = blocks
+            cceqr_avgblk[s] = avg_b/(k*n)
+            cceqr_active[s] = act/(k*n)
 
             # finding approximate cone centers in embedded space
             svdobj = svd(embedding[:, p_geqp3, s])
@@ -221,13 +221,13 @@ if(!plot_only)
                 geqp3_time[s, trial] = t
 
                 copy!(Vt, embedding[:, :, s])
-                t = @elapsed tcpqr!(Vt, eta = eta, rho = rho)
-                tcpqr_time[s, trial] = t
+                t = @elapsed cceqr!(Vt, eta = eta, rho = rho)
+                cceqr_time[s, trial] = t
             end
 
             fprintln("")
 
-            @save destination*"_data.jld2" srange geqp3_time tcpqr_time tcpqr_cycles tcpqr_avgblk tcpqr_active col_imbalance avg_angle cluster_skill
+            @save destination*"_data.jld2" srange geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active col_imbalance avg_angle cluster_skill
         end
     end
 
@@ -238,10 +238,10 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-@load destination*"_data.jld2" srange geqp3_time tcpqr_time tcpqr_cycles tcpqr_avgblk tcpqr_active col_imbalance avg_angle cluster_skill
+@load destination*"_data.jld2" srange geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active col_imbalance avg_angle cluster_skill
 
 ioff()
-fig = figure(figsize = (6, 22))
+fig = figure(figsize = (7, 22))
 
 skill  = fig.add_subplot(5, 1, 1)
 time   = fig.add_subplot(5, 1, 2)
@@ -257,20 +257,20 @@ skill.plot(srange, cluster_skill, color = "black", marker = "s", markerfacecolor
 time.set_xlabel("Cluster Separation Value")
 time.set_ylabel("Running Time (ms)")
 time.axhline(mean(geqp3_time)*1000, color = "blue", linestyle = "dashed", label = "GEQP3")
-time.plot(srange, vec(mean(tcpqr_time, dims = 2))*1000, color = "brown", marker = "v", markerfacecolor = "none", label = "TCPQR")
+time.plot(srange, vec(mean(cceqr_time, dims = 2))*1000, color = "brown", marker = "v", markerfacecolor = "none", label = "CCEQR")
 time.legend()
 
 cycles.set_xlabel("Cluster Separation Value")
-cycles.set_ylabel("TCPQR Cycle Count")
-cycles.plot(srange, tcpqr_cycles, color = "brown", marker = "v", markerfacecolor = "none")
+cycles.set_ylabel("CCEQR Cycle Count")
+cycles.plot(srange, cceqr_cycles, color = "brown", marker = "v", markerfacecolor = "none")
 
 block.set_xlabel("Cluster Separation Value")
-block.set_ylabel("TCPQR Average Block Percentage")
-block.plot(srange, tcpqr_avgblk, color = "brown", marker = "v", markerfacecolor = "none")
+block.set_ylabel("CCEQR Average Block Percentage")
+block.plot(srange, cceqr_avgblk, color = "brown", marker = "v", markerfacecolor = "none")
 
 active.set_xlabel("Cluster Separation Value")
-active.set_ylabel("TCPQR Active Set Percentage")
-active.plot(srange, tcpqr_active, color = "brown", marker = "v", markerfacecolor = "none")
+active.set_ylabel("CCEQR Active Set Percentage")
+active.plot(srange, cceqr_active, color = "brown", marker = "v", markerfacecolor = "none")
 
 savefig(destination*"_plot.pdf")
 close(fig)

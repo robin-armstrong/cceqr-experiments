@@ -1,16 +1,17 @@
 using LinearAlgebra
 
-include("tcpqr_utils.jl")
+include("cceqr_utils.jl")
 
 """
-tcpqr!(A; k = minimum(size(A)), eta = .9, rho = 1e-4)
+cceqr!(A; k = minimum(size(A)), rho = 1e-4, eta = .9)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
-of `A`, modifying `A` in place. Use thresholded updates with relative threshold `eta`.
-Returns the column permutation, the number of cycles used, the average pivoting block
-size per cycle, and the final size of the active set. See also `tcpqr`.
+of `A`, modifying `A` in place. Use a "collect, commit, expand" strategy with block
+proportion `rho` and expansion threshold `eta`. Returns the column permutation, the
+number of cycles used, the average pivoting block size per cycle, and the final size
+of the active set.
 """
-function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), eta::Float64 = .9, rho::Float64 = 1e-4)
+function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 1e-4, eta::Float64 = .9)
     m, n = size(A)
 
     if k < 1 
@@ -49,15 +50,15 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), eta::Float64 = 
 
     while skel < k
         cycle += 1
-        delta  = eta*lower
 
         # select a block from the active set to factorize
-
-        b          = threshold_reblock!(A, jpvt, skel+1, act, gamma, delta)
+        b          = ceil(Int64, rho*act)
         avg_block += b
-        (cycle == 1) && (act = b)
+        delta      = order_reblock!(A, jpvt, skel+1, act, gamma, b)
 
-        # factorize candidate columns with DGEQP3
+        (cycle == 1) && (act = b+1)
+
+        # factorize candidate columns with GEQP3
 
         block   = A[(skel+1):m, (skel+1):(skel+b)]
         min_dim = minimum(size(block))
@@ -104,11 +105,12 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), eta::Float64 = 
             lower    = max(lower, gamma[j])
         end
 
-        # randomly choosing a small set of new columns to make active
+        # choose a small set of new columns to make active, measure their
+        # residual norms.
 
-        r = floor(Int64, rho*(n-act))
-        (r > 0) && order_reblock!(A, jpvt, gamma, act+1, r)
-        (r > 0) && apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
+        r = ceil(Int64, rho*(n-act))
+        order_reblock!(A, jpvt, act+1, n, gamma, r)
+        apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
 
         for j = (act+1):(act+r)
             col      = view(A, (skel+t+1):m, j)
@@ -118,11 +120,11 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), eta::Float64 = 
 
         act += r
 
-        # deciding which remaining columns to bring into the active set
+        # decide which remaining columns to bring into the active set
 
         r = threshold_reblock!(A, jpvt, act+1, n, gamma, eta*lower)
 
-        # update residual column norms
+        # measure their residual norms
 
         if r > 0
             apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
@@ -131,7 +133,6 @@ function tcpqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), eta::Float64 = 
         for j = (act+1):(act+r)
             col       = view(A, 1:(skel+t), j)
             gamma[j] -= norm(col)^2
-            lower     = max(lower, gamma[j])
         end
 
         act  += r
