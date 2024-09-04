@@ -51,8 +51,8 @@ function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 
     while skel < k
         cycle += 1
 
-        # select a block from the active set to factorize
-        b          = ceil(Int64, rho*act)
+        # select a block from the non-skeleton active set to factorize
+        b          = ceil(Int64, rho*(act-skel))
         avg_block += b
         delta      = order_reblock!(A, jpvt, skel+1, act, gamma, b)
 
@@ -105,37 +105,41 @@ function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 
             lower    = max(lower, gamma[j])
         end
 
-        # choose a small set of new columns to make active, measure their
-        # residual norms.
+        # if there are still non-active columns, then we choose a small 
+        # number of them to make active, and we measure their residual
+        # column norms.
 
-        r = ceil(Int64, rho*(n-act))
-        order_reblock!(A, jpvt, act+1, n, gamma, r)
-        apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
-
-        for j = (act+1):(act+r)
-            col      = view(A, (skel+t+1):m, j)
-            gamma[j] = norm(col)^2
-            lower    = max(lower, gamma[j])
-        end
-
-        act += r
-
-        # decide which remaining columns to bring into the active set
-
-        r = threshold_reblock!(A, jpvt, act+1, n, gamma, eta*lower)
-
-        # measure their residual norms
-
-        if r > 0
+        if act < n
+            r = ceil(Int64, rho*(n-act))
+            order_reblock!(A, jpvt, act+1, n, gamma, r)
             apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
+
+            for j = (act+1):(act+r)
+                col      = view(A, (skel+t+1):m, j)
+                gamma[j] = norm(col)^2
+                lower    = max(lower, gamma[j])
+            end
+
+            act += r
+
+            # decide which remaining columns to bring into the active set
+
+            r = threshold_reblock!(A, jpvt, act+1, n, gamma, eta*lower)
+
+            # measure their residual norms
+
+            if r > 0
+                apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
+            end
+
+            for j = (act+1):(act+r)
+                col       = view(A, 1:(skel+t), j)
+                gamma[j] -= norm(col)^2
+            end
+
+            act  += r
         end
 
-        for j = (act+1):(act+r)
-            col       = view(A, 1:(skel+t), j)
-            gamma[j] -= norm(col)^2
-        end
-
-        act  += r
         skel += t
     end
 

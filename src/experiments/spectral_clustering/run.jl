@@ -11,7 +11,7 @@ include("../../algorithms/rpchol.jl")
 ######################## SCRIPT PARAMETERS ###############################
 ##########################################################################
 
-rng = MersenneTwister(2)
+rng = MersenneTwister(1)
 
 d      = 100                # data dimension
 k      = 20                 # number of mixture components, should be less than d
@@ -44,7 +44,7 @@ if(!plot_only)
         flush(stdout)
     end
 
-    function run_experiment(rng, d, k, n, srange, kernel, bandwidth, eta, rho, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
+    function run_cluster_experiment(rng, d, k, n, srange, kernel, bandwidth, eta, rho, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
         if(generate_embeddings)
             X           = zeros(k*n, 2*k)
             tmp         = zeros(k*n, 2*k)
@@ -231,7 +231,7 @@ if(!plot_only)
         end
     end
 
-    run_experiment(rng, d, k, n, srange, kernel, bandwidth, eta, rho, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
+    run_cluster_experiment(rng, d, k, n, srange, kernel, bandwidth, eta, rho, numtrials, plot_only, generate_embeddings, embedding_name, destination, readme)
 end
 
 ##########################################################################

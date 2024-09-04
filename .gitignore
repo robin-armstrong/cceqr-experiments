@@ -5,6 +5,7 @@
 *.txt
 *.sub
 *.out
+data
 clean.sh
 .DS_Store
 
