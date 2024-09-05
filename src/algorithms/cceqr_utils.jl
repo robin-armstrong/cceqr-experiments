@@ -55,15 +55,15 @@ function apply_qt!(A::Matrix{Float64}, V::Matrix{Float64}, T::Matrix{Float64}, p
 end
 
 ### Loops through the (:, j_start:j_end) block of A and moves all columns to the front that have squared norm exceeding threshold
-### delta. Modifies jpvt and gamma accordingly. Returns the number of columns that passed the threshold.
+### thresh. Modifies jpvt and gamma accordingly. Returns the number of columns that passed the threshold.
 
-function threshold_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end::Int64, gamma::Vector{Float64}, delta::Float64)
+function threshold_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end::Int64, gamma::Vector{Float64}, thresh::Float64)
     m, n   = size(A)
     tmpcol = zeros(m)
     blk    = 0
 
     for j = j_start:j_end
-        if gamma[j] > delta
+        if gamma[j] > thresh
             blk += 1
             p    = j_start+blk-1
             
@@ -93,7 +93,7 @@ function order_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64,
     tmpcol = zeros(m)
     gview  = view(gamma, j_start:j_end)
     samp   = partialsortperm(gview, 1:(r+1), rev = true)
-    g      = gview[samp[r+1]]
+    g      = (r < j_end - j_start) ? gview[samp[r+1]] : 0.
 
     for i = 1:r
         p = j_start+samp[i]-1

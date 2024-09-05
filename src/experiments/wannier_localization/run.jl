@@ -83,7 +83,7 @@ if(!plot_only)
                     got      = p_cceqr[j]
     
                     copy!(Vt, Psi)
-                    @save destination*"_failure_data.jld2" Vt j expected got
+                    @save destination*"_failure_data.jld2" Vt rho eta j expected got
                     throw(error("incorrect permutation from cceqr"))
                 end
 

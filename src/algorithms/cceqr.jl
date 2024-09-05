@@ -14,7 +14,7 @@ of the active set.
 function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 1e-4, eta::Float64 = .9)
     m, n = size(A)
 
-    if k < 1 
+    if k < 1
         throw(ArgumentError("k must be a positive integer"))
     elseif k > min(m, n)
         throw(ArgumentError("k cannot exceed the smaller dimension of the input matrix"))
@@ -27,8 +27,8 @@ function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 
     gamma = zeros(n)         # residual column norms
     lower = 0.               # lower bound on maximum residual column norm
     jpvt  = Array(1:n)       # column pivot vector
-    skel  = 0                # number of skeleton columns chosen so far
-    act   = n                # number of currently active columns
+    s     = 0                # number of skeleton columns chosen so far
+    t     = n                # number of currently active columns
     V     = zeros(m, k)      # storage for Householder reflectors
     T     = zeros(k, k)      # storage for T factor in compact WY representation
 
@@ -38,112 +38,106 @@ function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 
 
     for j = 1:n
         gamma[j] = norm(A[:,j])^2
-        
-        if gamma[j] >= lower
-            lower = gamma[j]
-        end
     end
     
     # compute column permutation in cycles
 
     cycle = 0
 
-    while skel < k
+    while s < k
         cycle += 1
 
         # select a block from the non-skeleton active set to factorize
-        b          = ceil(Int64, rho*(act-skel))
+        b          = 1 + floor(Int64, rho*(t-1))
         avg_block += b
-        delta      = order_reblock!(A, jpvt, skel+1, act, gamma, b)
+        delta      = order_reblock!(A, jpvt, s+1, s+t, gamma, b)
 
-        (cycle == 1) && (act = b+1)
+        (cycle == 1) && (t = b+1)
 
         # factorize candidate columns with GEQP3
 
-        block   = A[(skel+1):m, (skel+1):(skel+b)]
+        block   = A[(s+1):m, (s+1):(s+b)]
         min_dim = minimum(size(block))
         qrobj   = qr!(block, ColumnNorm())
 
         # figure out how many pivot choices are usable
 
-        t = sum(diag(qrobj.factors).^2 .>= delta)
-        t = min(t, k-skel)
+        c = sum(diag(qrobj.factors).^2 .>= delta)
+        c = min(c, k-s)
 
         # permute columns accordingly
 
-        swap_cols!(A, jpvt, gamma, skel+1, qrobj.p)
+        swap_cols!(A, jpvt, gamma, s+1, qrobj.p)
 
         # check to see if we've chosen enough skeleton columns
 
-        (skel+t == k) && break
+        (s+c == k) && break
 
         # update the orthogonal factor
 
-        V[(skel+1):m, (skel+1):(skel+t)] = qrobj.factors[:, 1:t]
+        V[(s+1):m, (s+1):(s+c)] = qrobj.factors[:, 1:c]
         
-        for i = (skel+1):(skel+t)
+        for i = (s+1):(s+c)
             V[i, i] = 1.
             fill!(view(V, 1:(i-1), i), 0.)
         end
 
-        tau = qrobj.Q.τ[1:t]
-        fill_t!(T, V, tau, skel+1, skel+t)
+        tau = qrobj.Q.τ[1:c]
+        fill_t!(T, V, tau, s+1, s+c)
 
         # apply new reflectors to the active set
         
-        apply_qt!(A, V, T, skel+1, skel+t, skel+1, act)
+        apply_qt!(A, V, T, s+1, s+c, s+1, s+t)
 
         # determine a lower bound on the maximum column norm orthogonal
-        # to the range of A[:, 1:(skel+t)], starting by measuring residual
+        # to the range of A[:, 1:(s+c)], starting by measuring residual
         # norms in the block we just factorized.
 
         lower = 0.
         
-        for j = (skel+t+1):act
-            col      = view(A, (skel+t+1):m, j)
+        for j = (s+c+1):(s+t)
+            col      = view(A, (s+c+1):m, j)
             gamma[j] = norm(col)^2
             lower    = max(lower, gamma[j])
         end
 
         # if there are still non-active columns, then we choose a small 
         # number of them to make active, and we measure their residual
-        # column norms.
+        # column norms as well to update the lower bound.
 
-        if act < n
-            r = ceil(Int64, rho*(n-act))
-            order_reblock!(A, jpvt, act+1, n, gamma, r)
-            apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
+        if s+t < n
+            r = ceil(Int64, rho*(n-s-c-t))
+            order_reblock!(A, jpvt, s+t+1, n, gamma, r)
+            apply_qt!(A, V, T, 1, s+c, s+t+1, s+t+r)
 
-            for j = (act+1):(act+r)
-                col      = view(A, (skel+t+1):m, j)
+            for j = (s+t+1):(s+t+r)
+                col      = view(A, (s+c+1):m, j)
                 gamma[j] = norm(col)^2
                 lower    = max(lower, gamma[j])
             end
 
-            act += r
+            t += r
 
             # decide which remaining columns to bring into the active set
 
-            r = threshold_reblock!(A, jpvt, act+1, n, gamma, eta*lower)
+            r = threshold_reblock!(A, jpvt, s+t+1, n, gamma, eta*lower)
 
             # measure their residual norms
 
-            if r > 0
-                apply_qt!(A, V, T, 1, skel+t, act+1, act+r)
-            end
+            (r > 0) && apply_qt!(A, V, T, 1, s+c, s+t+1, s+t+r)
 
-            for j = (act+1):(act+r)
-                col       = view(A, 1:(skel+t), j)
+            for j = (s+t+1):(s+t+r)
+                col       = view(A, 1:(s+c), j)
                 gamma[j] -= norm(col)^2
             end
 
-            act  += r
+            t  += r
         end
 
-        skel += t
+        s += c
     end
 
     avg_block /= cycle
 
-    return jpvt[1:k], cycle, avg_block, act
+    return jpvt[1:k], cycle, avg_block, s+t
 end
