@@ -3,7 +3,7 @@ using LinearAlgebra
 include("cceqr_utils.jl")
 
 """
-cceqr!(A; k = minimum(size(A)), rho = 1e-4, eta = .9)
+cceqr!(A; k = minimum(size(A)), rho = 1e-4, eta = .1)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
 of `A`, modifying `A` in place. Use a "collect, commit, expand" strategy with block
@@ -11,7 +11,7 @@ proportion `rho` and expansion threshold `eta`. Returns the column permutation, 
 number of cycles used, the average pivoting block size per cycle, and the final size
 of the tracked set.
 """
-function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 1e-4, eta::Float64 = .9)
+function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 1e-4, eta::Float64 = .1)
     m, n = size(A)
 
     if k < 1
