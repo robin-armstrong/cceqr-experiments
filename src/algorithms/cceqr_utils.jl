@@ -85,7 +85,7 @@ function threshold_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::In
 end
 
 ### Loops through the (:, j_start:j_end) block of A and moves r columns to the front, corresponding to the columns
-### with the highest value or gamma. Returns the (r+1)th largest gamma value in the block, i.e., the largest gamma
+### with the highest value of gamma. Returns the (r+1)th largest gamma value in the block, i.e., the largest gamma
 ### value *not* included in this set. Modifies jpvt and gamma accordingly.
 
 function order_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64, j_end::Int64, gamma::Vector{Float64}, r::Int64)
@@ -94,6 +94,8 @@ function order_reblock!(A::Matrix{Float64}, jpvt::Vector{Int64}, j_start::Int64,
     gview  = view(gamma, j_start:j_end)
     samp   = partialsortperm(gview, 1:(r+1), rev = true)
     g      = (r < j_end - j_start) ? gview[samp[r+1]] : 0.
+
+    sort!(view(samp, 1:r))
 
     for i = 1:r
         p = j_start+samp[i]-1

@@ -21,7 +21,7 @@ srange = range(1, 10, 10)   # cluster separation values
 kernel    = "inv-1"     # type of kernel function      
 bandwidth = 1.          # bandwidth of kernel function
 
-eta       = 0.9         # controls threshold value for CCEQR
+eta       = .1          # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
 numtrials = 100         # algorithm trials per separation value
 

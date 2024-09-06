@@ -1,6 +1,5 @@
 using LinearAlgebra
 using StatsBase
-using Debugger
 using PyPlot
 using JLD2
 
