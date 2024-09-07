@@ -1,7 +1,7 @@
 using LinearAlgebra
+using CairoMakie
 using StatsBase
 using Random
-using PyPlot
 using JLD2
 
 include("../../algorithms/cceqr.jl")
@@ -25,8 +25,8 @@ eta       = .1          # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
 numtrials = 100         # algorithm trials per separation value
 
-plot_only           = false     # if "true" then data will be read from disk and not regenerated
-generate_embeddings = true      # if "true" then embeddings will be calculated from Vt, otherwise read from disk
+plot_only           = true    # if "true" then data will be read from disk and not regenerated
+generate_embeddings = true     # if "true" then embeddings will be calculated from Vt, otherwise read from disk
 embedding_name      = "src/experiments/spectral_clustering/embeddings.jld2"
 
 destination = "src/experiments/spectral_clustering/cceqr_test"
@@ -73,9 +73,9 @@ if(!plot_only)
 
         logfile = destination*"_log.txt"
         touch(logfile)
-        open(logfile, "w")
-        write(logfile, logstr)
-        close(logfile)
+        io = open(logfile, "w")
+        write(io, logstr)
+        close(io)
 
         fprintln(logstr)
 
@@ -240,37 +240,76 @@ end
 
 @load destination*"_data.jld2" srange geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active col_imbalance avg_angle cluster_skill
 
-ioff()
-fig = figure(figsize = (7, 22))
+CairoMakie.activate!(visible = false, type = "pdf")
 
-skill  = fig.add_subplot(5, 1, 1)
-time   = fig.add_subplot(5, 1, 2)
-cycles = fig.add_subplot(5, 1, 3)
-block  = fig.add_subplot(5, 1, 4)
-active = fig.add_subplot(5, 1, 5)
+fig    = Figure(size = (700, 2200))
 
-skill.set_xlabel("Cluster Separation Value")
-skill.set_ylabel("Percentage of Correct Assignments")
-skill.set_ylim([-.05, 1.05])
-skill.plot(srange, cluster_skill, color = "black", marker = "s", markerfacecolor = "none")
+skill  = Axis(fig[1,1],
+              xlabel = "Cluster Separation Value",
+              ylabel = "Percentage of Correct Assignments"
+             )
+time   = Axis(fig[2,1],
+              xlabel = "Cluster Separation Value",
+              ylabel = "Running Time (ms)",
+             )
+cycles = Axis(fig[3,1],
+              xlabel = "Cluster Separation Value",
+              ylabel = "CCEQR Cycle Count"
+             )
+block =  Axis(fig[4,1],
+              xlabel = "Cluster Separation Value",
+              ylabel = "CCEQR Average Block Percentage"
+             )
+active = Axis(fig[5,1],
+              xlabel = "Cluster Separation Value",
+              ylabel = "CCEQR Active Set Percentage",
+              yscale = log10
+             )
 
-time.set_xlabel("Cluster Separation Value")
-time.set_ylabel("Running Time (ms)")
-time.axhline(mean(geqp3_time)*1000, color = "blue", linestyle = "dashed", label = "GEQP3")
-time.plot(srange, vec(mean(cceqr_time, dims = 2))*1000, color = "brown", marker = "v", markerfacecolor = "none", label = "CCEQR")
-time.legend()
+lines!(skill, srange, cluster_skill, color = :black)
 
-cycles.set_xlabel("Cluster Separation Value")
-cycles.set_ylabel("CCEQR Cycle Count")
-cycles.plot(srange, cceqr_cycles, color = "brown", marker = "v", markerfacecolor = "none")
+hlines!(time, mean(geqp3_time)*1000, color = :blue, linestyle = :dash, label = "GEQP3")
+lines!(time, srange, vec(mean(cceqr_time, dims = 2))*1000, color = :red, label = "CCEQR")
 
-block.set_xlabel("Cluster Separation Value")
-block.set_ylabel("CCEQR Average Block Percentage")
-block.plot(srange, cceqr_avgblk, color = "brown", marker = "v", markerfacecolor = "none")
+lines!(cycles, srange, cceqr_cycles, color = :red)
+lines!(block, srange, cceqr_avgblk, color = :red)
+lines!(active, srange, cceqr_active, color = :red)
 
-active.set_xlabel("Cluster Separation Value")
-active.set_ylabel("CCEQR Active Set Percentage")
-active.plot(srange, cceqr_active, color = "brown", marker = "v", markerfacecolor = "none")
+axislegend(time)
 
-savefig(destination*"_plot.pdf")
-close(fig)
+save(destination*"_plot.pdf", fig)
+
+# ioff()
+# fig = figure(figsize = (7, 22))
+
+# skill  = fig.add_subplot(5, 1, 1)
+# time   = fig.add_subplot(5, 1, 2)
+# cycles = fig.add_subplot(5, 1, 3)
+# block  = fig.add_subplot(5, 1, 4)
+# active = fig.add_subplot(5, 1, 5)
+
+# skill.set_xlabel("Cluster Separation Value")
+# skill.set_ylabel("Percentage of Correct Assignments")
+# skill.set_ylim([-.05, 1.05])
+# skill.plot(srange, cluster_skill, color = "black", marker = "s", markerfacecolor = "none")
+
+# time.set_xlabel("Cluster Separation Value")
+# time.set_ylabel("Running Time (ms)")
+# time.axhline(mean(geqp3_time)*1000, color = "blue", linestyle = "dashed", label = "GEQP3")
+# time.plot(srange, vec(mean(cceqr_time, dims = 2))*1000, color = "brown", marker = "v", markerfacecolor = "none", label = "CCEQR")
+# time.legend()
+
+# cycles.set_xlabel("Cluster Separation Value")
+# cycles.set_ylabel("CCEQR Cycle Count")
+# cycles.plot(srange, cceqr_cycles, color = "brown", marker = "v", markerfacecolor = "none")
+
+# block.set_xlabel("Cluster Separation Value")
+# block.set_ylabel("CCEQR Average Block Percentage")
+# block.plot(srange, cceqr_avgblk, color = "brown", marker = "v", markerfacecolor = "none")
+
+# active.set_xlabel("Cluster Separation Value")
+# active.set_ylabel("CCEQR Active Set Percentage")
+# active.plot(srange, cceqr_active, color = "brown", marker = "v", markerfacecolor = "none")
+
+# savefig(destination*"_plot.pdf")
+# close(fig)

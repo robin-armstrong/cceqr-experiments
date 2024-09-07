@@ -1,6 +1,5 @@
 using LinearAlgebra
 using StatsBase
-using PyPlot
 using JLD2
 
 include("../../algorithms/cceqr.jl")
@@ -115,39 +114,4 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-# @load destination*"_data.jld2" molecule rho_range eta_range numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
-
-# ioff()
-# fig = figure(figsize = (7, 22))
-
-# skill  = fig.add_subplot(5, 1, 1)
-# time   = fig.add_subplot(5, 1, 2)
-# cycles = fig.add_subplot(5, 1, 3)
-# block  = fig.add_subplot(5, 1, 4)
-# active = fig.add_subplot(5, 1, 5)
-
-# skill.set_xlabel("Cluster Separation Value")
-# skill.set_ylabel("Percentage of Correct Assignments")
-# skill.set_ylim([-.05, 1.05])
-# skill.plot(srange, cluster_skill, color = "black", marker = "s", markerfacecolor = "none")
-
-# time.set_xlabel("Cluster Separation Value")
-# time.set_ylabel("Running Time (ms)")
-# time.axhline(mean(geqp3_time)*1000, color = "blue", linestyle = "dashed", label = "GEQP3")
-# time.plot(srange, vec(mean(cceqr_time, dims = 2))*1000, color = "brown", marker = "v", markerfacecolor = "none", label = "CCEQR")
-# time.legend()
-
-# cycles.set_xlabel("Cluster Separation Value")
-# cycles.set_ylabel("CCEQR Cycle Count")
-# cycles.plot(srange, cceqr_cycles, color = "brown", marker = "v", markerfacecolor = "none")
-
-# block.set_xlabel("Cluster Separation Value")
-# block.set_ylabel("CCEQR Average Block Percentage")
-# block.plot(srange, cceqr_avgblk, color = "brown", marker = "v", markerfacecolor = "none")
-
-# active.set_xlabel("Cluster Separation Value")
-# active.set_ylabel("CCEQR Active Set Percentage")
-# active.plot(srange, cceqr_active, color = "brown", marker = "v", markerfacecolor = "none")
-
-# savefig(destination*"_plot.pdf")
-# close(fig)
+@load destination*"_data.jld2" molecule rho_range eta_range numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
