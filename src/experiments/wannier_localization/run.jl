@@ -10,13 +10,13 @@ include("../../algorithms/cceqr.jl")
 
 molecule  = "alkane"     # either "water" or "alkane"
 
-rho_range = exp10.(range(-4, -1, 5))
-eta_range = exp10.(range(-4, -1, 5))
-numtrials = 1
+rho_range = exp10.(range(-5, -.3, 20))
+eta_range = exp10.(range(-5, -.3, 20))
+numtrials = 10
 
 plot_only   = false     # if "true" then data will be read from disk and not regenerated
-destination = "src/experiments/wannier_localization/test"
-readme      = "Getting the Wannier localization script to work."
+destination = "src/experiments/wannier_localization/alkane"
+readme      = "Comparing GEQP3 and CCEQR on the alkane example."
 
 ##########################################################################
 ######################## DATA GENERATION #################################
@@ -39,9 +39,9 @@ if(!plot_only)
 
         logfile = destination*"_log.txt"
         touch(logfile)
-        open(logfile, "w")
-        write(logfile, logstr)
-        close(logfile)
+        io = open(logfile, "w")
+        write(io, logstr)
+        close(io)
 
         fprintln(logstr)
 
@@ -49,7 +49,7 @@ if(!plot_only)
         cceqr_cycles  = zeros(length(rho_range), length(eta_range))
         cceqr_avgblk  = zeros(length(rho_range), length(eta_range))
         cceqr_active  = zeros(length(rho_range), length(eta_range))
-        geqp3_time    = zeros(length(rho_range), length(eta_range), numtrials)
+        geqp3_time    = zeros(numtrials)
 
         totaltrials = length(rho_range)*length(eta_range)*numtrials
         trialcount  = 0
@@ -60,15 +60,23 @@ if(!plot_only)
         m, n = size(Psi)
         Vt   = zeros(m, n)
 
+        fprintln("testing GEQP3...")
+
+        copy!(Vt, Psi)
+        p_geqp3 = qr!(Vt, ColumnNorm()).p
+
+        for i = 1:numtrials
+            copy!(Vt, Psi)
+            geqp3_time[i] = @elapsed qr!(Vt, ColumnNorm())
+        end
+
+        fprintln("testing CCEQR...")
+
         for rho_index = 1:length(rho_range)
             rho = rho_range[rho_index]
 
             for eta_index = 1:length(eta_range)
                 eta = eta_range[eta_index]
-
-                copy!(Vt, Psi)
-                qrobj   = qr!(Vt, ColumnNorm())
-                p_geqp3 = qrobj.p[1:m]
 
                 copy!(Vt, Psi)
                 p_cceqr, blocks, avg_b, act = cceqr!(Vt, eta = eta, rho = rho)
@@ -92,10 +100,6 @@ if(!plot_only)
                 for trial_index = 1:numtrials
                     trialcount += 1
                     fprintln("    trial "*string(trialcount)*" of "*string(totaltrials)*"...")
-
-                    copy!(Vt, Psi)
-                    t = @elapsed qr!(Vt, ColumnNorm())
-                    geqp3_time[rho_index, eta_index, trial_index] = t
 
                     copy!(Vt, Psi)
                     t = @elapsed cceqr!(Vt, eta = eta, rho = rho)
