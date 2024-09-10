@@ -1,4 +1,5 @@
 using LinearAlgebra
+using CairoMakie
 using StatsBase
 using JLD2
 
@@ -14,7 +15,7 @@ rho_range = exp10.(range(-5, -.3, 20))
 eta_range = exp10.(range(-5, -.3, 20))
 numtrials = 10
 
-plot_only   = false     # if "true" then data will be read from disk and not regenerated
+plot_only   = False     # if "true" then data will be read from disk and not regenerated
 destination = "src/experiments/wannier_localization/alkane"
 readme      = "Comparing GEQP3 and CCEQR on the alkane example."
 
@@ -119,3 +120,43 @@ end
 ##########################################################################
 
 @load destination*"_data.jld2" molecule rho_range eta_range numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
+
+CairoMakie.activate!(visible = false, type = "pdf")
+fig = Figure(size = (900, 300))
+
+heatmap(log10.(rho_range), log10.(eta_range), cceqr_cycles)
+
+time = Axis(fig[1,1],
+            title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$",
+            xlabel = L"$\log_{10} \,\rho$",
+            ylabel = L"$\log_{10} \,\eta$"
+           )
+
+blocks = Axis(fig[1,2],
+              title  = "Average Block Percentage Per Cycle",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
+
+active = Axis(fig[1,3],
+              title  = "Final Active Set Percentage",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
+
+cceqr_mean_times = zeros(length(rho_range), length(eta_range))
+
+for i = 1:length(rho_range)
+    for j = 1:length(eta_range)
+        no_outliers = (cceqr_time[i, j, :] .< 100.)
+        cceqr_mean_times[i,j] = mean(cceqr_time[i, j, no_outliers])
+    end
+end
+
+time_comp = mean(geqp3_time)*cceqr_mean_times.^(-1)
+
+heatmap!(time, log10.(rho_range), log10.(eta_range), time_comp)
+heatmap!(blocks, log10.(rho_range), log10.(eta_range), cceqr_avgblk)
+heatmap!(active, log10.(rho_range), log10.(eta_range), cceqr_active)
+
+save(destination*"_plot.pdf", fig)
