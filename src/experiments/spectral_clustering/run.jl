@@ -25,7 +25,7 @@ eta       = .1          # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
 numtrials = 100         # algorithm trials per separation value
 
-plot_only           = true    # if "true" then data will be read from disk and not regenerated
+plot_only           = false    # if "true" then data will be read from disk and not regenerated
 generate_embeddings = true     # if "true" then embeddings will be calculated from Vt, otherwise read from disk
 embedding_name      = "src/experiments/spectral_clustering/embeddings.jld2"
 

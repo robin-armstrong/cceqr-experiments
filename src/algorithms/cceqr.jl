@@ -3,15 +3,21 @@ using LinearAlgebra
 include("cceqr_utils.jl")
 
 """
-cceqr!(A; k = minimum(size(A)), rho = 1e-4, eta = .1)
+cceqr!(A; k = minimum(size(A)), rho = 1e-4, eta = .1, project_all = false)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
 of `A`, modifying `A` in place. Use a "collect, commit, expand" strategy with block
-proportion `rho` and expansion threshold `eta`. Returns the column permutation, the
-number of cycles used, the average pivoting block size per cycle, and the final size
-of the tracked set.
+proportion `rho` and expansion threshold `eta`. If `project_all == true`, then apply
+Householder reflections to all columns yielding a complete `R` factor. Returns the
+column permutation, the number of cycles used, the average pivoting block size per
+cycle, and the final size of the tracked set.
 """
-function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 1e-4, eta::Float64 = .1)
+function cceqr!(A::Matrix{Float64};
+                k::Int64 = minimum(size(A)),
+                rho::Float64 = 1e-4,
+                eta::Float64 = .1,
+                project_all::Bool = false)
+
     m, n = size(A)
 
     if k < 1
@@ -68,10 +74,6 @@ function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 
 
         swap_cols!(A, jpvt, gamma, s+1, qrobj.p)
 
-        # check to see if we've chosen enough skeleton columns
-
-        (s+c == k) && break
-
         # update the orthogonal factor
 
         V[(s+1):m, (s+1):(s+c)] = qrobj.factors[:, 1:c]
@@ -87,6 +89,10 @@ function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 
         # apply new reflectors to the tracked set
         
         apply_qt!(A, V, T, s+1, s+c, s+1, s+t)
+
+        # check to see if we've chosen enough skeleton columns
+
+        (s+c == k) && break
 
         # determine a lower bound on the maximum column norm orthogonal
         # to the range of A[:, 1:(s+c)], starting by measuring residual
@@ -135,6 +141,10 @@ function cceqr!(A::Matrix{Float64}; k::Int64 = minimum(size(A)), rho::Float64 = 
 
         s += c
         t -= c
+    end
+
+    if project_all
+        apply_qt!(A, V, T, 1, s, s+t+1, n)
     end
 
     avg_block /= cycle

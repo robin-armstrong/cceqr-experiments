@@ -15,17 +15,14 @@ rho_range = exp10.(range(-5, -.3, 20))
 eta_range = exp10.(range(-5, -.3, 20))
 numtrials = 10
 
-plot_only   = False     # if "true" then data will be read from disk and not regenerated
+plot_only   = false      # if "true" then data will be read from disk and not regenerated
 destination = "src/experiments/wannier_localization/alkane"
 readme      = "Comparing GEQP3 and CCEQR on the alkane example."
 
 ##########################################################################
 ######################## DATA GENERATION #################################
 ##########################################################################
-
-if(!plot_only)
-    # logging the parameters used for this experiment
-
+if !plot_only
     function fprintln(s)
         println(s)
         flush(stdout)
@@ -121,29 +118,6 @@ end
 
 @load destination*"_data.jld2" molecule rho_range eta_range numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
 
-CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (900, 300))
-
-heatmap(log10.(rho_range), log10.(eta_range), cceqr_cycles)
-
-time = Axis(fig[1,1],
-            title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$",
-            xlabel = L"$\log_{10} \,\rho$",
-            ylabel = L"$\log_{10} \,\eta$"
-           )
-
-blocks = Axis(fig[1,2],
-              title  = "Average Block Percentage Per Cycle",
-              xlabel = L"$\log_{10} \,\rho$",
-              ylabel = L"$\log_{10} \,\eta$"
-             )
-
-active = Axis(fig[1,3],
-              title  = "Final Active Set Percentage",
-              xlabel = L"$\log_{10} \,\rho$",
-              ylabel = L"$\log_{10} \,\eta$"
-             )
-
 cceqr_mean_times = zeros(length(rho_range), length(eta_range))
 
 for i = 1:length(rho_range)
@@ -153,10 +127,42 @@ for i = 1:length(rho_range)
     end
 end
 
-time_comp = mean(geqp3_time)*cceqr_mean_times.^(-1)
+geqp3_mean = mean(geqp3_time)
+time_comp  = geqp3_mean*cceqr_mean_times.^(-1)
 
+CairoMakie.activate!(visible = false, type = "pdf")
+fig = Figure(size = (800, 700))
+
+time = Axis(fig[1,1],
+            title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$",
+            xlabel = L"$\log_{10} \,\rho$",
+            ylabel = L"$\log_{10} \,\eta$"
+           )
 heatmap!(time, log10.(rho_range), log10.(eta_range), time_comp)
+Colorbar(fig[1,2], limits = extrema(time_comp))
+
+blocks = Axis(fig[1,3],
+              title  = "Average Block Percentage Per Cycle",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
 heatmap!(blocks, log10.(rho_range), log10.(eta_range), cceqr_avgblk)
+Colorbar(fig[1,4], limits = extrema(cceqr_avgblk))
+
+active = Axis(fig[2,1],
+              title  = "Final Active Set Percentage",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
 heatmap!(active, log10.(rho_range), log10.(eta_range), cceqr_active)
+Colorbar(fig[2,2], limits = extrema(cceqr_active))
+
+cycles = Axis(fig[2,3],
+              title  = "CCEQR Cycle Count",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
+heatmap!(cycles, log10.(rho_range), log10.(eta_range), cceqr_cycles)
+Colorbar(fig[2,4], limits = extrema(cceqr_cycles))
 
 save(destination*"_plot.pdf", fig)
