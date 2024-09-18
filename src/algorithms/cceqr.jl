@@ -76,15 +76,7 @@ function cceqr!(A::Matrix{Float64};
 
         # update the orthogonal factor
 
-        V[(s+1):m, (s+1):(s+c)] = qrobj.factors[:, 1:c]
-        
-        for i = (s+1):(s+c)
-            V[i, i] = 1.
-            fill!(view(V, 1:(i-1), i), 0.)
-        end
-
-        tau = qrobj.Q.τ[1:c]
-        fill_t!(T, V, tau, s+1, s+c)
+        update_q!(T, V, qrobj.factors, qrobj.Q.τ, s+1, s+c)
 
         # apply new reflectors to the tracked set
         

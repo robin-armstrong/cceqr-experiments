@@ -2,10 +2,20 @@ using LinearAlgebra
 using StatsBase
 using Random
 
-### Fills the (1:q, p:q) block of T for compact WY form using the Schreiber-van Loan algorithm.
+### Fills the (:, p:q) block of V and the (1:q, p:q) block of T for compact WY form using the Schreiber-van Loan algorithm.
 
-function fill_t!(T::AbstractMatrix{Float64}, V::Matrix{Float64}, tau::Vector{Float64}, p::Int64, q::Int64)
+function update_q!(T::AbstractMatrix{Float64}, V::Matrix{Float64}, F::Matrix{Float64}, tau::Vector{Float64}, p::Int64, q::Int64)
+    # filling the (:, p:q) block of V
+    
+    V[p:end, p:q] = F[:, 1:(q-p+1)]
+
+    for i = p:q
+        V[i, i] = 1.
+        fill!(view(V, 1:(i-1), i), 0.)
+    end
+    
     # filling the (p:q, p:q) block of T
+    
     for s = 1:(q-p+1)
         i       = p+s-1
         T[i, i] = tau[s]
@@ -22,6 +32,7 @@ function fill_t!(T::AbstractMatrix{Float64}, V::Matrix{Float64}, tau::Vector{Flo
     end
     
     # filling the (1:(p-1), p:q) block of T
+    
     if p > 1
         T11 = UpperTriangular(view(T, 1:(p-1), 1:(p-1)))
         T22 = UpperTriangular(view(T, p:q, p:q))
