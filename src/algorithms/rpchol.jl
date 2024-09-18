@@ -1,25 +1,25 @@
 using LinearAlgebra
 
 ### Computes a low-rank factorization K ~ X*X', where K is a kernel evaluation
-### matrix given by K[i,j] = kfunc(norm(data[:, i] - data[:, j])), and kfunc
+### matrix given by K[i,j] = kfunc(norm(data[:, s[i]] - data[:, s[j]])), and kfunc
 ### defines a positive-definite kernel. The approximation factor X has dimension
-### (N, k), where N = size(data, 2) and k is the approximation rank. This
+### (n, k), where n = size(data, 2) and k is the approximation rank. This
 ### function uses a partial Cholesky factorization with adaptive random pivoting;
 ### see Chen, Epperly, Tropp, and Webber, 2023. All randomness is drawn from rng.
 
-function rpchol!(rng, k, data, kfunc, X)
-    N     = size(data, 2)
-    kdiag = kfunc(0.)*ones(N)
+function rpchol!(rng, k, data, s, kfunc, X)
+    n     = length(s)
+    kdiag = kfunc(0.)*ones(n)
 
     for j = 1:k
-        fprintln("      RPCHOL: filling Cholesky column "*string(j)*" of "*string(k))
+        fprintln("        RPCHOL: filling Cholesky column "*string(j)*" of "*string(k))
 
-        p     = sample(rng, 1:N, Weights(kdiag))
-        pivot = data[:, p]
+        p     = sample(rng, 1:n, Weights(kdiag))
+        pivot = data[:, s[p]]
         col   = view(X, :, j)
         
-        for i = 1:N
-            col[i] = kfunc(norm(pivot - data[:,i]))
+        for i = 1:n
+            col[i] = kfunc(norm(pivot - data[:,s[i]]))
         end
 
         if j > 1
