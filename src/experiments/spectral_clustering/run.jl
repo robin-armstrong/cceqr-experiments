@@ -13,14 +13,14 @@ include("../../algorithms/rpchol.jl")
 
 rng = MersenneTwister(1)
 
-n_centers = 5
-n_shells  = 4
-radius    = 10
-noise     = .2
-n_points  = round.(Int64, exp10.(range(4, 5, 15)))     # range of dataset sizes
+n_centers = 3
+n_shells  = 2
+radius    = .01
+noise     = .0001
+n_points  = 2*round.(Int64, exp10.(range(3, 3, 1)))     # range of dataset sizes
 
-kernel    = "inv-1"     # type of kernel function      
-bandwidth = 1.          # bandwidth of kernel function
+kernel    = "inv-1"    # type of kernel function      
+bandwidth = .0002          # bandwidth of kernel function
 
 eta       = 1e-4        # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
@@ -36,6 +36,11 @@ readme      = "Getting the script to work."
 ##########################################################################
 
 if !plot_only
+    function fprint(s)
+        print(s)
+        flush(stdout)
+    end
+
     function fprintln(s)
         println(s)
         flush(stdout)
@@ -82,9 +87,10 @@ if !plot_only
 
         # setting up arrays to record data
 
-        cceqr_cycles = zeros(length(n_points))
-        cceqr_avgblk = zeros(length(n_points))
-        cceqr_active = zeros(length(n_points))
+        cceqr_cycles  = zeros(length(n_points))
+        cceqr_avgblk  = zeros(length(n_points))
+        cceqr_active  = zeros(length(n_points))
+        cluster_skill = zeros(length(n_points))
 
         # setting up scratch spaces
 
@@ -93,49 +99,89 @@ if !plot_only
         X_full    = zeros(N, 2*k)
         tmp_full  = zeros(N, 2*k)
         
-        fprintln("\ngenerating dataset...")
+        fprintln("generating dataset...")
 
-        data  = zeros(2, N)         # stores data points
-        label = zeros(Int64, N)     # stores true labels
+        data   = zeros(2, N)         # stores data points
+        labels = zeros(Int64, N)     # stores true labels
         
         s_wght = Weights(1:n_shells)        # weights to assign random shell indices
         rmax   = radius*sin(pi/n_centers)   # maximum shell radius
 
         for i = 1:N
-            c_idx    = floor(Int64, n_centers*rand(rng))
-            s_idx    = sample(rng, s_wght)
-            label[i] = n_shells*(c_idx - 1) + s_idx
+            c_idx     = floor(Int64, n_centers*rand(rng))
+            s_idx     = sample(rng, s_wght)
+            labels[i] = n_shells*c_idx + s_idx
 
             x1        = collect(reim(exp(2*pi*im*c_idx/n_centers)))
             x2        = collect(reim(exp(2*pi*im*rand(rng))))
-            r2        = .9*rmax*s_idx/n_shells
+            r2        = .5*rmax*s_idx/n_shells
             data[:,i] = radius*x1 + r2*x2 + noise*randn(rng, 2)
         end
+
+        ##### BEGIN DEBUGGING BLOCK
+            CairoMakie.activate!(visible = false, type = "pdf")
+            fig = Figure(size = (700, 700))
+            plt = Axis(fig[1,1])
+            scatter!(plt, data)
+            save(destination*"_plot.pdf", fig)
+
+            K = zeros(N, N)
+
+            for i = 1:N
+                for j = i:N
+                    K[i,j] = kfunc(norm(data[:,i] - data[:,j]))
+                    K[j,i] = K[i,j]
+                end
+            end
+
+            true_svd = svd(K)
+        ##### END DEBUGGING BLOCK
 
         for (n_idx, n) in enumerate(n_points)
             fprintln("\nDATASET SIZE "*string(n_idx)*" OF "*string(length(n_points)))
             fprintln("-------------------------------------")
             fprintln("    selecting data points...")
 
-            s = randperm(rng, N)[1:n]
+            samp = randperm(rng, N)[1:n]
 
-            fprintln("    estimating kernel matrix eigenvectors...")
+            fprintln("    approximating normalized adjacency matrix...")
 
             # rank-2k approximation of kernel evaluation matrix using
             # randomly pivoted partial Cholesky
 
             X = view(X_full, 1:n, :)
-            rpchol!(rng, 2*k, data, s, kfunc, X)
+            rpchol!(rng, 2*k, data, samp, kfunc, X)
+
+            # estimating the row sums and normalizing
+
+            d = X*(X'*ones(n))
+            lmul!(inv(Diagonal(sqrt.(d))), X)
 
             # approximate eigenvalue decomposition
 
-            svdobj = svd(X'*X)
-            tmp    = view(tmp_full, 1:n, :)
+            s1  = svd(X'*X)
+            tmp = view(tmp_full, 1:n, :)
 
-            mul!(tmp, X, svdobj.V)
-            rmul!(tmp, inv(Diagonal(sqrt.(svdobj.S))))
+            mul!(tmp, X, s1.V)
+            rmul!(tmp, inv(Diagonal(sqrt.(s1.S))))
             
             V = view(tmp, :, 1:k)
+
+            ##### BEGIN DEBUGGING BLOCK
+                fprint("\nkernel matrix spectrum (1:(2k+1)) = ")
+                display(true_svd.S[1:(2*k+1)])
+                gamma = true_svd.S[k+1]/true_svd.S[k]
+                fprintln("\nspectral gap = "*string(gamma))
+
+                err_true = norm(K[samp, samp] - X*X')
+                K_norm   = norm(true_svd.S)
+                fprintln("\nrpchol relative error = "*string(err_true/K_norm))
+
+                cosines = svd(true_svd.Vt[1:k, :]*V).S
+                fprint("\ncosines = ")
+                display(cosines)
+                return
+            ##### END DEBUGGING BLOCK
 
             fprintln("\n    running CPQR clustering...")
 
@@ -166,7 +212,45 @@ if !plot_only
             cceqr_avgblk[n_idx] = avg_b/n
             cceqr_active[n_idx] = act/n
 
-            @save destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active
+            # finding approximate cone centers in embedded space
+            s2 = svd(V[p_geqp3, :]')
+            Q  = s2.U*s2.Vt
+
+            # classifying the data
+            mul!(A, Q, V')
+            broadcast!(abs, A, A)
+            learned_labels = argmax(A, dims = 1)
+
+            fprintln("    finding learned/true labels correspondence...")
+
+            match_table = zeros(k, k)
+
+            for i = 1:n
+                l = learned_labels[i][1]
+                match_table[l, labels[samp[i]]] += 1
+            end
+
+            label_perm = zeros(Int64, k)
+
+            for l = 1:k
+                idx                = findmax(match_table)[2]
+                label_perm[idx[1]] = idx[2]
+
+                fill!(view(match_table, idx[1], :), -1.)
+                fill!(view(match_table, :, idx[2]), -1.)
+            end
+
+            fprintln("    measuring cluster accuracy...")
+
+            for i = 1:n
+                l = learned_labels[i][1]
+                
+                if(label_perm[l] == labels[samp[i]])
+                    cluster_skill[n_idx] += 1/n
+                end
+            end
+
+            @save destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill
         end
     end
 
@@ -178,3 +262,8 @@ end
 ##########################################################################
 ######################## PLOTTING ########################################
 ##########################################################################
+
+# @load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill
+
+# println("CLUSTER SKILL:")
+# display(cluster_skill)
