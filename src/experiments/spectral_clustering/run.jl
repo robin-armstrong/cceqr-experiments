@@ -19,8 +19,8 @@ radius    = .01
 noise     = .0001
 n_points  = 2*round.(Int64, exp10.(range(3, 3, 1)))     # range of dataset sizes
 
-kernel    = "inv-1"    # type of kernel function      
-bandwidth = .0002          # bandwidth of kernel function
+kernel    = "gaussian"    # type of kernel function      
+bandwidth = .001          # bandwidth of kernel function
 
 eta       = 1e-4        # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
@@ -94,10 +94,11 @@ if !plot_only
 
         # setting up scratch spaces
 
-        N         = n_points[end]
-        k         = n_centers*n_shells
-        X_full    = zeros(N, 2*k)
-        tmp_full  = zeros(N, 2*k)
+        N          = n_points[end]
+        k          = n_centers*n_shells
+        X_full     = zeros(N, 2*k)
+        tmp_full   = zeros(N, 2*k)
+        dummyrange = Array(1:N)
         
         fprintln("generating dataset...")
 
@@ -118,24 +119,58 @@ if !plot_only
             data[:,i] = radius*x1 + r2*x2 + noise*randn(rng, 2)
         end
 
-        ##### BEGIN DEBUGGING BLOCK
+        fprintln("    estimating adjacency matrix degrees...")
+
+        degrees = zeros(N)
+
+        # we're going to populate `degrees` block-by-block, where
+        # each block corresponds to data points with the same
+        # label. For each such block we compute the average
+        # degree of a small random sample of points, and use
+        # this as the approximate degree for every point in the
+        # block. The intuition here is that due to the geometric
+        # symmetry of the problem, all points with the same label
+        # should have more-or-less the same degree.
+
+        for c_idx = 0:(n_centers - 1)
+            for s_idx = 1:n_shells
+                l      = n_shells*c_idx + s_idx
+                l_idxs = dummyrange[labels .== l]
+
+                sampsize = min(length(l_idxs), 100)
+                samp     = l_idxs[randperm(rng, length(l_idxs))[1:sampsize]]
+                K        = zeros(sampsize, N)
+
+                for i = 1:sampsize
+                    for j = 1:N
+                        K[i,j] = kfunc(norm(data[:, samp[i]] - data[:, j]))
+                    end
+                end
+
+                deg    = mean(K*ones(N))
+                d_view = view(degrees, l_idxs)
+                fill!(d_view, deg)
+            end
+        end
+
+        #### BEGIN DEBUGGING BLOCK
             CairoMakie.activate!(visible = false, type = "pdf")
             fig = Figure(size = (700, 700))
             plt = Axis(fig[1,1])
             scatter!(plt, data)
             save(destination*"_plot.pdf", fig)
 
-            K = zeros(N, N)
+            K_full = zeros(N, N)
 
             for i = 1:N
                 for j = i:N
-                    K[i,j] = kfunc(norm(data[:,i] - data[:,j]))
-                    K[j,i] = K[i,j]
+                    K_full[i,j] = kfunc(norm(data[:,i] - data[:,j]))
+                    K_full[j,i] = K_full[i,j]
                 end
             end
 
-            true_svd = svd(K)
-        ##### END DEBUGGING BLOCK
+            true_svd = svd(K_full)
+        #### END DEBUGGING BLOCK
 
         for (n_idx, n) in enumerate(n_points)
             fprintln("\nDATASET SIZE "*string(n_idx)*" OF "*string(length(n_points)))
@@ -152,10 +187,9 @@ if !plot_only
             X = view(X_full, 1:n, :)
             rpchol!(rng, 2*k, data, samp, kfunc, X)
 
-            # estimating the row sums and normalizing
+            # normalizing by degrees
 
-            d = X*(X'*ones(n))
-            lmul!(inv(Diagonal(sqrt.(d))), X)
+            lmul!(inv(Diagonal(sqrt.(degrees[samp]))), X)
 
             # approximate eigenvalue decomposition
 
@@ -167,13 +201,17 @@ if !plot_only
             
             V = view(tmp, :, 1:k)
 
-            ##### BEGIN DEBUGGING BLOCK
+            #### BEGIN DEBUGGING BLOCK
+                true_degrees = K_full*ones(N)
+                deg_err = norm(degrees - true_degrees)/norm(true_degrees)
+                fprintln("\ndegree estimation errors = "*string(deg_err))
+
                 fprint("\nkernel matrix spectrum (1:(2k+1)) = ")
                 display(true_svd.S[1:(2*k+1)])
                 gamma = true_svd.S[k+1]/true_svd.S[k]
                 fprintln("\nspectral gap = "*string(gamma))
 
-                err_true = norm(K[samp, samp] - X*X')
+                err_true = norm(K_full[samp, samp] - X*X')
                 K_norm   = norm(true_svd.S)
                 fprintln("\nrpchol relative error = "*string(err_true/K_norm))
 
@@ -181,7 +219,7 @@ if !plot_only
                 fprint("\ncosines = ")
                 display(cosines)
                 return
-            ##### END DEBUGGING BLOCK
+            #### END DEBUGGING BLOCK
 
             fprintln("\n    running CPQR clustering...")
 
