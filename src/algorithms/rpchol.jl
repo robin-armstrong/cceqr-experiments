@@ -7,9 +7,9 @@ using LinearAlgebra
 ### function uses a partial Cholesky factorization with adaptive random pivoting;
 ### see Chen, Epperly, Tropp, and Webber, 2023. All randomness is drawn from rng.
 
-function rpchol!(rng, d, data, samp, kfunc, X)
+function rpchol!(rng, d, data, degrees, samp, kfunc, X)
     n     = length(samp)
-    kdiag = kfunc(0.)*ones(n)
+    kdiag = kfunc(0.)*degrees[samp].^(-1)
 
     for j = 1:d
         fprintln("        RPCHOL: filling Cholesky column "*string(j)*" of "*string(d))
@@ -19,7 +19,7 @@ function rpchol!(rng, d, data, samp, kfunc, X)
         col   = view(X, :, j)
         
         for i = 1:n
-            col[i] = kfunc(norm(pivot - data[:, samp[i]]))
+            col[i] = kfunc(norm(pivot - data[:, samp[i]]))/sqrt(degrees[samp[i]]*degrees[samp[p]])
         end
 
         if j > 1
@@ -27,10 +27,10 @@ function rpchol!(rng, d, data, samp, kfunc, X)
             V2 = view(X, p, 1:(j-1))
             mul!(col, V1, V2, -1., 1.)
         end
-
+        
         col   ./= sqrt(col[p])
         kdiag .-= col.^2
-
+        
         broadcast!(max, kdiag, kdiag, 0.)
     end
 end

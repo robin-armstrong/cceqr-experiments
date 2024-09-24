@@ -1,6 +1,7 @@
 using LinearAlgebra
 using CairoMakie
 using StatsBase
+using Debugger
 using Random
 using JLD2
 
@@ -19,8 +20,8 @@ radius    = .01
 noise     = .0001
 n_points  = 2*round.(Int64, exp10.(range(3, 3, 1)))     # range of dataset sizes
 
-kernel    = "gaussian"    # type of kernel function      
-bandwidth = .001          # bandwidth of kernel function
+kernel    = "inv-1"    # type of kernel function      
+bandwidth = .0005          # bandwidth of kernel function
 
 eta       = 1e-4        # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
@@ -96,8 +97,8 @@ if !plot_only
 
         N          = n_points[end]
         k          = n_centers*n_shells
-        X_full     = zeros(N, 2*k)
-        tmp_full   = zeros(N, 2*k)
+        X_full     = zeros(N, 10*k)
+        tmp_full   = zeros(N, 10*k)
         dummyrange = Array(1:N)
         
         fprintln("generating dataset...")
@@ -169,6 +170,13 @@ if !plot_only
                 end
             end
 
+            true_degrees = K_full*ones(N)
+            D_sqrt       = Diagonal(sqrt.(true_degrees))
+
+            rmul!(K_full, inv(D_sqrt))
+            lmul!(inv(D_sqrt), K_full)
+
+            fprintln("    full SVD of kernel matrix :( ...")
             true_svd = svd(K_full)
         #### END DEBUGGING BLOCK
 
@@ -185,11 +193,7 @@ if !plot_only
             # randomly pivoted partial Cholesky
 
             X = view(X_full, 1:n, :)
-            rpchol!(rng, 2*k, data, samp, kfunc, X)
-
-            # normalizing by degrees
-
-            lmul!(inv(Diagonal(sqrt.(degrees[samp]))), X)
+            rpchol!(rng, 10*k, data, degrees, samp, kfunc, X)
 
             # approximate eigenvalue decomposition
 
@@ -202,7 +206,6 @@ if !plot_only
             V = view(tmp, :, 1:k)
 
             #### BEGIN DEBUGGING BLOCK
-                true_degrees = K_full*ones(N)
                 deg_err = norm(degrees - true_degrees)/norm(true_degrees)
                 fprintln("\ndegree estimation errors = "*string(deg_err))
 
@@ -301,7 +304,7 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-# @load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill
+@load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill
 
-# println("CLUSTER SKILL:")
-# display(cluster_skill)
+println("CLUSTER SKILL:")
+display(cluster_skill)
