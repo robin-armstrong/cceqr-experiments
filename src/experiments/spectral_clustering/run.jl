@@ -12,16 +12,14 @@ include("../../algorithms/rpchol.jl")
 ######################## SCRIPT PARAMETERS ###############################
 ##########################################################################
 
-rng = MersenneTwister(1)
+rng = MersenneTwister(2)
 
-n_centers = 3
-n_shells  = 2
-radius    = .01
-noise     = .0001
-n_points  = 2*round.(Int64, exp10.(range(3, 3, 1)))     # range of dataset sizes
+k        = 8
+noise    = .05
+n_points = 4*round.(Int64, exp10.(range(3, 3, 1)))     # range of dataset sizes
 
 kernel    = "inv-1"    # type of kernel function      
-bandwidth = .0005          # bandwidth of kernel function
+bandwidth = .5         # bandwidth of kernel function
 
 eta       = 1e-4        # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
@@ -47,14 +45,12 @@ if !plot_only
         flush(stdout)
     end
 
-    function run_cluster_experiment(rng, n_centers, n_shells, radius, noise,
-                                    n_points, kernel, bandwidth, eta, rho, numtrials,
+    function run_cluster_experiment(rng, k, noise, n_points, kernel,
+                                    bandwidth, eta, rho, numtrials,
                                     plot_only, destination, readme)
         
         logstr  = "rng       = "*string(rng)*"\n"
-        logstr *= "n_centers = "*string(n_centers)*"\n"
-        logstr *= "n_shells  = "*string(n_shells)*"\n"
-        logstr *= "radius    = "*string(radius)*"\n"
+        logstr *= "k         = "*string(k)*"\n"
         logstr *= "noise     = "*string(noise)*"\n"
         logstr *= "n_points  = "*string(n_points)*"\n"
         logstr *= "kernel    = "*kernel*"\n"
@@ -75,13 +71,15 @@ if !plot_only
         # setting up the kernel function
 
         if kernel == "gaussian"
-            kfunc = x -> exp(-.5*(x/bandwidth)^2)
+            kfunc = x -> exp(-(x/bandwidth)^2)
         elseif kernel == "laplace"
             kfunc = x -> exp(-x/bandwidth)
         elseif kernel == "inv-1"
             kfunc = x -> 1/(1 + x/bandwidth)
         elseif kernel == "inv-2"
             kfunc = x -> 1/(1 + (x/bandwidth)^2)
+        elseif kernel == "window"
+            kfunc = x -> (x <= bandwidth ? 1. : 0.)
         else
             throw(ArgumentError("unrecognized kernel '"*kernel*"'"))
         end
@@ -96,89 +94,66 @@ if !plot_only
         # setting up scratch spaces
 
         N          = n_points[end]
-        k          = n_centers*n_shells
         X_full     = zeros(N, 10*k)
         tmp_full   = zeros(N, 10*k)
         dummyrange = Array(1:N)
         
         fprintln("generating dataset...")
 
-        data   = zeros(2, N)         # stores data points
-        labels = zeros(Int64, N)     # stores true labels
+        data    = zeros(2, N)        # stores data points
+        labels  = zeros(Int64, N)    # stores true labels
+        sqnorms = zeros(N)
+        w       = Weights(1:k)
         
-        s_wght = Weights(1:n_shells)        # weights to assign random shell indices
-        rmax   = radius*sin(pi/n_centers)   # maximum shell radius
-
         for i = 1:N
-            c_idx     = floor(Int64, n_centers*rand(rng))
-            s_idx     = sample(rng, s_wght)
-            labels[i] = n_shells*c_idx + s_idx
+            l          = rand(rng, 1:k)
+            labels[i]  = l
+            t          = 2*pi*rand(rng)
+            data[:,i]  = [1.5*pi*l + t, sin(t)] + noise*randn(rng, 2)
+            sqnorms[i] = norm(data[:,i])^2
 
-            x1        = collect(reim(exp(2*pi*im*c_idx/n_centers)))
-            x2        = collect(reim(exp(2*pi*im*rand(rng))))
-            r2        = .5*rmax*s_idx/n_shells
-            data[:,i] = radius*x1 + r2*x2 + noise*randn(rng, 2)
+            # l          = sample(1:k, w)
+            # labels[i]  = l
+            # data[:,i]  = l*collect(reim(exp(2*pi*rand(rng)*im))) + noise*randn(rng, 2)
+            # sqnorms[i] = norm(data[:,i])^2
         end
 
-        fprintln("    estimating adjacency matrix degrees...")
+        fprintln("calculating adjacency matrix degrees...")
 
         degrees = zeros(N)
+        tmp     = zeros(N)
 
-        # we're going to populate `degrees` block-by-block, where
-        # each block corresponds to data points with the same
-        # label. For each such block we compute the average
-        # degree of a small random sample of points, and use
-        # this as the approximate degree for every point in the
-        # block. The intuition here is that due to the geometric
-        # symmetry of the problem, all points with the same label
-        # should have more-or-less the same degree.
+        for i = 1:N
+            fill!(tmp, sqnorms[i])
 
-        for c_idx = 0:(n_centers - 1)
-            for s_idx = 1:n_shells
-                l      = n_shells*c_idx + s_idx
-                l_idxs = dummyrange[labels .== l]
+            tmp .+= sqnorms
+            tmp .-= 2*data'*data[:, i]
 
-                sampsize = min(length(l_idxs), 100)
-                samp     = l_idxs[randperm(rng, length(l_idxs))[1:sampsize]]
-                K        = zeros(sampsize, N)
+            broadcast!(abs, tmp, tmp)
+            broadcast!(sqrt, tmp, tmp)
+            broadcast!(kfunc, tmp, tmp)
 
-                for i = 1:sampsize
-                    for j = 1:N
-                        K[i,j] = kfunc(norm(data[:, samp[i]] - data[:, j]))
-                    end
-                end
-
-                deg    = mean(K*ones(N))
-                d_view = view(degrees, l_idxs)
-                fill!(d_view, deg)
-            end
+            degrees[i] = sum(tmp)
         end
 
-        #### BEGIN DEBUGGING BLOCK
-            CairoMakie.activate!(visible = false, type = "pdf")
-            fig = Figure(size = (700, 700))
-            plt = Axis(fig[1,1])
-            scatter!(plt, data)
-            save(destination*"_plot.pdf", fig)
-
+        ### BEGIN DEBUGGING BLOCK
             K_full = zeros(N, N)
 
             for i = 1:N
-                for j = i:N
+                for j  = i:N
                     K_full[i,j] = kfunc(norm(data[:,i] - data[:,j]))
                     K_full[j,i] = K_full[i,j]
                 end
             end
 
-            true_degrees = K_full*ones(N)
-            D_sqrt       = Diagonal(sqrt.(true_degrees))
-
-            rmul!(K_full, inv(D_sqrt))
-            lmul!(inv(D_sqrt), K_full)
+            D = Diagonal(degrees)
+            lmul!(inv(D), K_full)
+            rmul!(K_full, inv(D))
 
             fprintln("    full SVD of kernel matrix :( ...")
+
             true_svd = svd(K_full)
-        #### END DEBUGGING BLOCK
+        ### END DEBUGGING BLOCK
 
         for (n_idx, n) in enumerate(n_points)
             fprintln("\nDATASET SIZE "*string(n_idx)*" OF "*string(length(n_points)))
@@ -205,24 +180,9 @@ if !plot_only
             
             V = view(tmp, :, 1:k)
 
-            #### BEGIN DEBUGGING BLOCK
-                deg_err = norm(degrees - true_degrees)/norm(true_degrees)
-                fprintln("\ndegree estimation errors = "*string(deg_err))
-
-                fprint("\nkernel matrix spectrum (1:(2k+1)) = ")
-                display(true_svd.S[1:(2*k+1)])
-                gamma = true_svd.S[k+1]/true_svd.S[k]
-                fprintln("\nspectral gap = "*string(gamma))
-
-                err_true = norm(K_full[samp, samp] - X*X')
-                K_norm   = norm(true_svd.S)
-                fprintln("\nrpchol relative error = "*string(err_true/K_norm))
-
-                cosines = svd(true_svd.Vt[1:k, :]*V).S
-                fprint("\ncosines = ")
-                display(cosines)
-                return
-            #### END DEBUGGING BLOCK
+            ### BEGIN DEBUGGING BLOCK
+                V = Matrix{Float64}(true_svd.Vt[1:k, samp]')
+            ### END DEBUGGING BLOCK
 
             fprintln("\n    running CPQR clustering...")
 
@@ -234,9 +194,9 @@ if !plot_only
             p_geqp3 = qr!(A, ColumnNorm()).p[1:k]
             copy!(A, V')
             p_cceqr, blocks, avg_b, act = cceqr!(A, eta = eta, rho = rho)
-            
+
             # making sure the "homemade" CPQR is giving the right results
-            
+
             if(p_geqp3[1:k] != p_cceqr)
                 j = 1
                 while(p_geqp3[j] == p_cceqr[j]) j += 1 end
@@ -258,16 +218,29 @@ if !plot_only
             Q  = s2.U*s2.Vt
 
             # classifying the data
-            mul!(A, Q, V')
+            mul!(A, Q', V')
             broadcast!(abs, A, A)
-            learned_labels = argmax(A, dims = 1)
+            learned_labels_raw = argmax(A, dims = 1)
+            learned_labels     = [learned_labels_raw[i][1] for i = 1:n]
+
+            ### BEGIN DEBUGGING BLOCK
+                CairoMakie.activate!(visible = false, type = "pdf")
+                fig = Figure(size = (2800, 700))
+                plt = Axis(fig[1,1])
+
+                for lab = 1:k
+                    idx = learned_labels .== lab
+                    scatter!(plt, data[:, samp[idx]])
+                end
+                save(destination*"_plot.pdf", fig)
+            ### END DEBUGGING BLOCK
 
             fprintln("    finding learned/true labels correspondence...")
 
             match_table = zeros(k, k)
 
             for i = 1:n
-                l = learned_labels[i][1]
+                l = learned_labels[i]
                 match_table[l, labels[samp[i]]] += 1
             end
 
@@ -284,19 +257,18 @@ if !plot_only
             fprintln("    measuring cluster accuracy...")
 
             for i = 1:n
-                l = learned_labels[i][1]
+                l = learned_labels[i]
                 
                 if(label_perm[l] == labels[samp[i]])
                     cluster_skill[n_idx] += 1/n
                 end
             end
 
-            @save destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill
+            @save destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill K_full true_svd degrees labels
         end
     end
 
-    run_cluster_experiment(rng, n_centers, n_shells, radius, noise,
-                           n_points, kernel, bandwidth, eta, rho, numtrials,
+    run_cluster_experiment(rng, k, noise, n_points, kernel, bandwidth, eta, rho, numtrials,
                            plot_only, destination, readme)
 end
 
@@ -304,7 +276,7 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-@load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill
+@load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill K_full true_svd degrees labels
 
 println("CLUSTER SKILL:")
 display(cluster_skill)
