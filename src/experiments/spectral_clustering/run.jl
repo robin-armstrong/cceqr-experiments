@@ -14,12 +14,12 @@ include("../../algorithms/rpchol.jl")
 
 rng = MersenneTwister(2)
 
-k        = 8
+k        = 4
 noise    = .05
 n_points = 4*round.(Int64, exp10.(range(3, 3, 1)))     # range of dataset sizes
 
-kernel    = "inv-1"    # type of kernel function      
-bandwidth = .5         # bandwidth of kernel function
+kernel    = "gaussian"  # type of kernel function      
+bandwidth = .1         # bandwidth of kernel function
 
 eta       = 1e-4        # controls threshold value for CCEQR
 rho       = 1e-4        # controls selection of columns for Householder reflection
@@ -100,22 +100,23 @@ if !plot_only
         
         fprintln("generating dataset...")
 
-        data    = zeros(2, N)        # stores data points
-        labels  = zeros(Int64, N)    # stores true labels
+        data    = zeros(2, N)       # stores data points
+        labels  = zeros(Int64, N)   # stores true labels
         sqnorms = zeros(N)
         w       = Weights(1:k)
         
         for i = 1:N
             l          = rand(rng, 1:k)
             labels[i]  = l
-            t          = 2*pi*rand(rng)
+
+            t = 2*pi*rand(rng)
+            
+            while rand(rng) > sqrt(.5*(1 + cos(t)^2))
+                t = 2*pi*rand(rng)
+            end
+
             data[:,i]  = [1.5*pi*l + t, sin(t)] + noise*randn(rng, 2)
             sqnorms[i] = norm(data[:,i])^2
-
-            # l          = sample(1:k, w)
-            # labels[i]  = l
-            # data[:,i]  = l*collect(reim(exp(2*pi*rand(rng)*im))) + noise*randn(rng, 2)
-            # sqnorms[i] = norm(data[:,i])^2
         end
 
         fprintln("calculating adjacency matrix degrees...")
@@ -136,31 +137,12 @@ if !plot_only
             degrees[i] = sum(tmp)
         end
 
-        ### BEGIN DEBUGGING BLOCK
-            K_full = zeros(N, N)
-
-            for i = 1:N
-                for j  = i:N
-                    K_full[i,j] = kfunc(norm(data[:,i] - data[:,j]))
-                    K_full[j,i] = K_full[i,j]
-                end
-            end
-
-            D = Diagonal(degrees)
-            lmul!(inv(D), K_full)
-            rmul!(K_full, inv(D))
-
-            fprintln("    full SVD of kernel matrix :( ...")
-
-            true_svd = svd(K_full)
-        ### END DEBUGGING BLOCK
-
         for (n_idx, n) in enumerate(n_points)
             fprintln("\nDATASET SIZE "*string(n_idx)*" OF "*string(length(n_points)))
             fprintln("-------------------------------------")
             fprintln("    selecting data points...")
 
-            samp = randperm(rng, N)[1:n]
+            samp = 1:N #randperm(rng, N)[1:n]
 
             fprintln("    approximating normalized adjacency matrix...")
 
@@ -180,10 +162,6 @@ if !plot_only
             
             V = view(tmp, :, 1:k)
 
-            ### BEGIN DEBUGGING BLOCK
-                V = Matrix{Float64}(true_svd.Vt[1:k, samp]')
-            ### END DEBUGGING BLOCK
-
             fprintln("\n    running CPQR clustering...")
 
             A = zeros(k, n)
@@ -194,6 +172,9 @@ if !plot_only
             p_geqp3 = qr!(A, ColumnNorm()).p[1:k]
             copy!(A, V')
             p_cceqr, blocks, avg_b, act = cceqr!(A, eta = eta, rho = rho)
+
+            println("p_geqp3[1:k] = ")
+            display(p_geqp3[1:k])
 
             # making sure the "homemade" CPQR is giving the right results
 
@@ -218,20 +199,21 @@ if !plot_only
             Q  = s2.U*s2.Vt
 
             # classifying the data
-            mul!(A, Q', V')
+            mul!(A, Q, V')
             broadcast!(abs, A, A)
             learned_labels_raw = argmax(A, dims = 1)
             learned_labels     = [learned_labels_raw[i][1] for i = 1:n]
 
             ### BEGIN DEBUGGING BLOCK
                 CairoMakie.activate!(visible = false, type = "pdf")
-                fig = Figure(size = (2800, 700))
+                fig = Figure(size = (1200, 600))
                 plt = Axis(fig[1,1])
 
-                for lab = 1:k
-                    idx = learned_labels .== lab
-                    scatter!(plt, data[:, samp[idx]])
+                for l = 1:k
+                    label_idx = (learned_labels .== l)
+                    scatter!(plt, data[:,label_idx])
                 end
+
                 save(destination*"_plot.pdf", fig)
             ### END DEBUGGING BLOCK
 
@@ -264,7 +246,7 @@ if !plot_only
                 end
             end
 
-            @save destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill K_full true_svd degrees labels
+            @save destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill data A labels learned_labels label_perm
         end
     end
 
@@ -276,7 +258,7 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-@load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill K_full true_svd degrees labels
+@load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill data A labels learned_labels label_perm
 
 println("CLUSTER SKILL:")
 display(cluster_skill)
