@@ -6,7 +6,7 @@ using Random
 using JLD2
 
 include("../../algorithms/cceqr.jl")
-include("../../algorithms/rpchol.jl")
+include("../../algorithms/pivchol.jl")
 
 ##########################################################################
 ######################## SCRIPT PARAMETERS ###############################
@@ -14,20 +14,19 @@ include("../../algorithms/rpchol.jl")
 
 rng = MersenneTwister(2)
 
-k        = 2
-scale    = 10.
-noise    = .5
-n_points = 4*round.(Int64, exp10.(range(3, 3, 1)))     # range of dataset sizes
+n      = 1000    # number of data points, must be > 4*k
+k      = 20        # number of Gaussian mixture components
+scale  = 30.
+noise  = 1.
 
-kernel    = "inv-1"  # type of kernel function      
-bandwidth = .5         # bandwidth of kernel function
+kernel    = "gaussian"  # type of kernel function      
+bandwidth = 10.         # bandwidth of kernel function
 
-eta       = 1e-4        # controls threshold value for CCEQR
-rho       = 1e-4        # controls selection of columns for Householder reflection
-numtrials = 100         # algorithm trials per separation value
+rho_range = exp10.(range(-5, -.3, 20))
+eta_range = exp10.(range(-5, -.3, 20))
+numtrials = 10
 
-plot_only = false       # if "true" then data will be read from disk and not regenerated
-
+plot_only   = false       # if "true" then data will be read from disk and not regenerated
 destination = "src/experiments/spectral_clustering/test"
 readme      = "Getting the script to work."
 
@@ -46,19 +45,19 @@ if !plot_only
         flush(stdout)
     end
 
-    function run_cluster_experiment(rng, k, noise, scale, n_points,
-                                    kernel, bandwidth, eta, rho, numtrials,
-                                    plot_only, destination, readme)
+    function run_cluster_experiment(rng, n, k, scale, noise, kernel, bandwidth,
+                                    rho_range, eta_range, numtrials, destination,
+                                    readme)
         
         logstr  = "rng       = "*string(rng)*"\n"
+        logstr *= "n         = "*string(n)*"\n"
         logstr *= "k         = "*string(k)*"\n"
-        logstr *= "noise     = "*string(noise)*"\n"
         logstr *= "scale     = "*string(scale)*"\n"
-        logstr *= "n_points  = "*string(n_points)*"\n"
+        logstr *= "noise     = "*string(noise)*"\n"
         logstr *= "kernel    = "*kernel*"\n"
         logstr *= "bandwidth = "*string(bandwidth)*"\n"
-        logstr *= "eta       = "*string(eta)*"\n"
-        logstr *= "rho       = "*string(rho)*"\n"
+        logstr *= "eta_range = "*string(eta_range)*"\n"
+        logstr *= "rho_range = "*string(rho_range)*"\n"
         logstr *= "numtrials = "*string(numtrials)*"\n"
         logstr *= "\n"*readme*"\n"
 
@@ -88,173 +87,191 @@ if !plot_only
 
         # setting up arrays to record data
 
-        cceqr_cycles  = zeros(length(n_points))
-        cceqr_avgblk  = zeros(length(n_points))
-        cceqr_active  = zeros(length(n_points))
-        cluster_skill = zeros(length(n_points))
-
-        # setting up scratch spaces
-
-        N          = n_points[end]
-        X_full     = zeros(N, 10*k)
-        tmp_full   = zeros(N, 10*k)
-        dummyrange = Array(1:N)
+        cceqr_cycles = zeros(length(eta_range), length(rho_range))
+        cceqr_avgblk = zeros(length(eta_range), length(rho_range))
+        cceqr_active = zeros(length(eta_range), length(rho_range))
+        cceqr_time   = zeros(length(eta_range), length(rho_range), numtrials)
+        geqp3_time   = zeros(numtrials)
         
         fprintln("generating dataset...")
 
-        data    = zeros(k, N)       # stores data points
-        # labels  = zeros(Int64, N)   # stores true labels
-        sqnorms = zeros(N)
+        data = zeros(n, k)       # stores data points
         
-        for j = 1:N
-            i          = rand(rng, 1:k)
+        for i = 1:n
+            j          = rand(rng, 1:k)
             data[i,j]  = scale
-            data[:,j] += noise*randn(rng, k)
-            sqnorms[j] = norm(data[:,j])^2
+            data[i,:] += noise*randn(rng, k)
         end
 
-        fprintln("calculating adjacency matrix degrees...")
+        fprintln("estimating adjacency matrix eigenvectors...\n")
 
-        degrees = zeros(N)
-        tmp     = zeros(N)
+        X   = zeros(n, 4*k)
+        tmp = zeros(n, 4*k)
+        
+        pivchol!(4*k, data, kfunc, X)
+        s1 = svd(X'*X)
+        mul!(tmp, X, s1.V)
+        rmul!(tmp, inv(Diagonal(sqrt.(s1.S))))
 
-        for i = 1:N
-            fill!(tmp, sqnorms[i])
+        Vt = Matrix{Float64}(tmp[:, 1:k]')
 
-            tmp .+= sqnorms
-            tmp .-= 2*data'*data[:, i]
+        fprintln("\nclustering data and benchmarking GEQP3...")
 
-            broadcast!(abs, tmp, tmp)
-            broadcast!(sqrt, tmp, tmp)
-            broadcast!(kfunc, tmp, tmp)
+        tmp = zeros(size(Vt))
+        copy!(tmp, Vt)
+        p_geqp3 = qr!(tmp, ColumnNorm()).p[1:k]
 
-            degrees[i] = sum(tmp)
+        for t = 1:numtrials
+            copy!(tmp, Vt)
+            geqp3_time[t] = @elapsed qr(tmp, ColumnNorm())
         end
 
-        for (n_idx, n) in enumerate(n_points)
-            fprintln("\nDATASET SIZE "*string(n_idx)*" OF "*string(length(n_points)))
-            fprintln("-------------------------------------")
-            fprintln("    selecting data points...")
+        s2 = svd(Vt[:, p_geqp3])
+        Q  = s2.U*s2.Vt
+        W  = Q'*Vt
 
-            samp = randperm(rng, N)[1:n]
+        labels_raw = argmax(W, dims = 1)
+        labels     = [labels_raw[i][1] for i = 1:n]
 
-            fprintln("    approximating normalized adjacency matrix...")
+        fprintln("fitting Gaussian mixture model...")
 
-            # rank-2k approximation of kernel evaluation matrix using
-            # randomly pivoted partial Cholesky
+        means = zeros(k, k)
+        vars  = zeros(k)
 
-            X = view(X_full, 1:n, :)
-            rpchol!(rng, 10*k, data, degrees, samp, kfunc, X)
+        cluster_skill = 0.
 
-            # approximate eigenvalue decomposition
+        for i = 1:k
+            idx        = (labels .== i)
+            num_idx    = length(idx)
 
-            s1  = svd(X'*X)
-            tmp = view(tmp_full, 1:n, :)
+            # finding the mean and variance for the given mixture component
 
-            mul!(tmp, X, s1.V)
-            rmul!(tmp, inv(Diagonal(sqrt.(s1.S))))
+            means[:,i] = mean(data[idx, :], dims = 1)
             
-            V = view(tmp, :, 1:k)
-
-            fprintln("\n    running CPQR clustering...")
-
-            A = zeros(k, n)
-
-            # precompiling CPQR algorithms
-
-            copy!(A, V')
-            p_geqp3 = qr!(A, ColumnNorm()).p[1:k]
-            copy!(A, V')
-            p_cceqr, blocks, avg_b, act = cceqr!(A, eta = eta, rho = rho)
-
-            println("p_geqp3[1:k] = ")
-            display(p_geqp3[1:k])
-
-            # making sure the "homemade" CPQR is giving the right results
-
-            if(p_geqp3[1:k] != p_cceqr)
-                j = 1
-                while(p_geqp3[j] == p_cceqr[j]) j += 1 end
-
-                expected = p_geqp3[j]
-                got      = p_cceqr[j]
-
-                copy!(A, V')
-                @save destination*"_failure_data.jld2" A j expected got
-                throw(error("incorrect permutation from cceqr"))
+            for j = 1:n
+                idx[j]  || continue
+                vars[i] += norm(data[j,:] - means[:,i])^2/(num_idx - 1)
             end
+        end
 
-            cceqr_cycles[n_idx] = blocks
-            cceqr_avgblk[n_idx] = avg_b/n
-            cceqr_active[n_idx] = act/n
+        fprintln("measuring cluster skill...")
 
-            # finding approximate cone centers in embedded space
-            s2 = svd(V[p_geqp3, :]')
-            Q  = s2.U*s2.Vt
+        # learned probability density for i^th Gaussian
+        p(x,i) = exp(-.5*norm(x - means[:,i])^2/vars[i])/(sqrt(2*pi*vars[i])^k)
+        
+        # E[p(X, i)] where X ~ Gaussian(means[:,i], vars[i]*I)
+        E(i) = (.5/sqrt(pi*vars[i]))^k
+        
+        skill_learned = 0.
+        skill_random  = 0.
+        
+        for i = 1:n
+            l_learned = labels[i]
+            l_random  = rand(rng, 1:k)
 
-            # classifying the data into mixture components
+            skill_learned += p(data[i,:], l_learned)/(n*E(l_learned))
+            skill_random  += p(data[i,:], l_random)/(n*E(l_random))
+        end
 
-            mul!(A, Q, V')
-            broadcast!(abs, A, A)
-            labels_raw = argmax(A, dims = 1)
-            labels     = [labels_raw[i][1] for i = 1:n]
+        fprintln("skill (learned labels): "*string(skill_learned))
+        fprintln("skill (random labels):  "*string(skill_random))
+        fprintln("\nmeasuring CCEQR runtimes...\n")
 
-            fprintln("    measuring cluster accuracy...")
+        totaltrials = length(rho_range)*length(eta_range)*numtrials
+        trialcount  = 0
 
-            means = zeros(k, k)
-            vars  = zeros(k)
-
-            for i = 1:k
-                idx        = (labels .== i)
-                num_idx    = length(idx)
-
-                # finding the mean and variance for the given mixture component
-
-                means[:,i] = mean(data[:,samp[idx]], dims = 2)
+        for (rho_idx, rho) in enumerate(rho_range)
+            for (eta_idx, eta) in enumerate(eta_range)
+                # precompiling CCEQR and making sure it gives the right permutation
                 
-                for j = 1:n
-                    idx[j]  || continue
-                    vars[i] += norm(data[:,samp[j]] - means[:,i])^2/(num_idx - 1)
+                copy!(tmp, Vt)
+                p_cceqr, blocks, avg_b, act = cceqr!(tmp, eta = eta, rho = rho)
+
+                if(p_cceqr != p_geqp3)
+                    j = 1
+                    while(p_geqp3[j] == p_cceqr[j]) j += 1 end
+    
+                    expected = p_geqp3[j]
+                    got      = p_cceqr[j]
+    
+                    copy!(tmp, Vt)
+                    @save destination*"_failure_data.jld2" Vt rho eta j expected got
+                    throw(error("incorrect permutation from CCEQR"))
                 end
 
-                # multivariate Gaussian pdf for this mixture component
-                p(x) = exp(-.5*norm(x - means[:,i])^2/vars[i])/(sqrt(2*pi*vars[i])^k)
-                
-                # E[p(X)] where X ~ Gaussian(means[i], vars[i]*I)
-                E = (.5/sqrt(pi*vars[i]))^k
+                cceqr_cycles[rho_idx, eta_idx] = blocks
+                cceqr_avgblk[rho_idx, eta_idx] = avg_b/n
+                cceqr_active[rho_idx, eta_idx] = act/n
 
-                for j = 1:n
-                    idx[j]  || continue
-                    cluster_skill[n_idx] += p(data[:,samp[j]])/(n*E)
+                for trial_idx = 1:numtrials
+                    trialcount += 1
+                    fprintln("    trial "*string(trialcount)*" of "*string(totaltrials)*"...")
+
+                    copy!(tmp, Vt)
+                    t = @elapsed cceqr!(tmp, eta = eta, rho = rho)
+                    cceqr_time[rho_idx, eta_idx, trial_idx] = t
                 end
+
+                @save destination*"_data.jld2" n k rho_range eta_range skill_learned skill_random numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
             end
-
-            ### BEGIN DEBUGGING BLOCK
-                CairoMakie.activate!(visible = false, type = "pdf")
-                fig = Figure(size = (700, 700))
-                plt = Axis(fig[1,1])
-
-                for i = 1:k
-                    idx = (labels .== i)
-                    scatter!(plt, data[:, samp[idx]])
-                end
-
-                save(destination*"_plot.pdf", fig)
-            ### END DEBUGGING BLOCK
-
-            @save destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill means vars
         end
     end
 
-    run_cluster_experiment(rng, k, noise, scale, n_points, kernel, bandwidth, eta, rho, numtrials,
-                           plot_only, destination, readme)
+    run_cluster_experiment(rng, n, k, scale, noise, kernel, bandwidth,
+                           rho_range, eta_range, numtrials, destination, readme)
 end
 
 ##########################################################################
 ######################## PLOTTING ########################################
 ##########################################################################
 
-@load destination*"_data.jld2" cceqr_cycles cceqr_avgblk cceqr_active cluster_skill means vars
+@load destination*"_data.jld2" n k rho_range eta_range skill_learned skill_random numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
 
-println("CLUSTER SKILL:")
-display(cluster_skill)
+cceqr_mean_times = zeros(length(rho_range), length(eta_range))
+
+for i = 1:length(rho_range)
+    for j = 1:length(eta_range)
+        no_outliers = (cceqr_time[i, j, :] .< 100.)
+        cceqr_mean_times[i,j] = mean(cceqr_time[i, j, no_outliers])
+    end
+end
+
+geqp3_mean = mean(geqp3_time)
+time_comp  = geqp3_mean*cceqr_mean_times.^(-1)
+
+CairoMakie.activate!(visible = false, type = "pdf")
+fig = Figure(size = (800, 700))
+
+time = Axis(fig[1,1],
+            title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$",
+            xlabel = L"$\log_{10} \,\rho$",
+            ylabel = L"$\log_{10} \,\eta$"
+           )
+heatmap!(time, log10.(rho_range), log10.(eta_range), time_comp)
+Colorbar(fig[1,2], limits = extrema(time_comp))
+
+blocks = Axis(fig[1,3],
+              title  = "Average Block Percentage Per Cycle",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
+heatmap!(blocks, log10.(rho_range), log10.(eta_range), cceqr_avgblk)
+Colorbar(fig[1,4], limits = extrema(cceqr_avgblk))
+
+active = Axis(fig[2,1],
+              title  = "Final Active Set Percentage",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
+heatmap!(active, log10.(rho_range), log10.(eta_range), cceqr_active)
+Colorbar(fig[2,2], limits = extrema(cceqr_active))
+
+cycles = Axis(fig[2,3],
+              title  = "CCEQR Cycle Count",
+              xlabel = L"$\log_{10} \,\rho$",
+              ylabel = L"$\log_{10} \,\eta$"
+             )
+heatmap!(cycles, log10.(rho_range), log10.(eta_range), cceqr_cycles)
+Colorbar(fig[2,4], limits = extrema(cceqr_cycles))
+
+save(destination*"_plot.pdf", fig)

@@ -7,29 +7,28 @@ using LinearAlgebra
 ### function uses a partial Cholesky factorization with adaptive random pivoting;
 ### see Chen, Epperly, Tropp, and Webber, 2023. All randomness is drawn from rng.
 
-function rpchol!(rng, d, data, degrees, samp, kfunc, X)
-    n     = length(samp)
-    kdiag = kfunc(0.)*degrees[samp].^(-1)
+function pivchol!(d, data, kfunc, X)
+    n     = size(data, 1)
+    kdiag = kfunc(0.)*ones(n)
 
     for j = 1:d
         fprintln("        RPCHOL: filling Cholesky column "*string(j)*" of "*string(d))
 
-        p     = sample(rng, 1:n, Weights(kdiag))
-        pivot = data[:, samp[p]]
-        col   = view(X, :, j)
+        p     = findmax(kdiag)[2]
+        pivot = data[p,:]
+        col   = zeros(n)
         
         for i = 1:n
-            col[i] = kfunc(norm(pivot - data[:, samp[i]]))/sqrt(degrees[samp[i]]*degrees[samp[p]])
+            col[i] = kfunc(norm(pivot - data[i,:]))
         end
 
         if j > 1
-            V1 = view(X, :, 1:(j-1))
-            V2 = view(X, p, 1:(j-1))
-            mul!(col, V1, V2, -1., 1.)
+            col[:] = col - X[:, 1:(j-1)]*X[p, 1:(j-1)]
         end
         
-        col   ./= sqrt(col[p])
-        kdiag .-= col.^2
+        col[:]   = col/sqrt(col[p])
+        X[:,j]   = col
+        kdiag[:] = kdiag - col.^2
         
         broadcast!(max, kdiag, kdiag, 0.)
     end
