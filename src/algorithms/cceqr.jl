@@ -48,6 +48,7 @@ function cceqr!(A::Matrix{Float64};
     # compute column permutation in cycles
 
     cycle = 0
+    lower = 0.
 
     while s < k
         cycle += 1
@@ -56,6 +57,7 @@ function cceqr!(A::Matrix{Float64};
         b          = 1 + floor(Int64, rho*(t-1))
         avg_block += b
         delta      = order_reblock!(A, jpvt, s+1, s+t, gamma, b)
+        delta      = max(delta, (1 - eta)*lower)
 
         (cycle == 1) && (t = b+1)
 

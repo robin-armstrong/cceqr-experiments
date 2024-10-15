@@ -14,21 +14,21 @@ include("../../algorithms/pivchol.jl")
 
 rng = MersenneTwister(2)
 
-n      = 1000    # number of data points, must be > 4*k
+n      = 400000    # number of data points, must be > 4*k
 k      = 20        # number of Gaussian mixture components
-scale  = 30.
+scale  = 3.
 noise  = 1.
 
 kernel    = "gaussian"  # type of kernel function      
 bandwidth = 10.         # bandwidth of kernel function
 
-rho_range = exp10.(range(-5, -.3, 20))
-eta_range = exp10.(range(-5, -.3, 20))
-numtrials = 10
+rho_range = exp10.(range(-5, -.3, 10))
+eta_range = exp10.(range(-5, -.3, 10))
+numtrials = 5
 
 plot_only   = false       # if "true" then data will be read from disk and not regenerated
-destination = "src/experiments/spectral_clustering/test"
-readme      = "Getting the script to work."
+destination = "src/experiments/spectral_clustering/cluster"
+readme      = "Comparing GEQP3 and CCEQR on a spectral clustering problem."
 
 ##########################################################################
 ######################## DATA GENERATION #################################
