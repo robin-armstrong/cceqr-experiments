@@ -48,7 +48,7 @@ function cceqr!(A::Matrix{Float64};
     # compute column permutation in cycles
 
     cycle = 0
-    lower = 0.
+    mu = 0.
 
     while s < k
         cycle += 1
@@ -57,7 +57,6 @@ function cceqr!(A::Matrix{Float64};
         b          = 1 + floor(Int64, rho*(t-1))
         avg_block += b
         delta      = order_reblock!(A, jpvt, s+1, s+t, gamma, b)
-        delta      = max(delta, (1 - eta)*lower)
 
         (cycle == 1) && (t = b+1)
 
@@ -92,13 +91,16 @@ function cceqr!(A::Matrix{Float64};
         # to the range of A[:, 1:(s+c)], starting by measuring residual
         # norms in the block we just factorized.
 
-        lower = 0.
+        mu = 0.
         
         for j = (s+c+1):(s+t)
-            col      = view(A, (s+c+1):m, j)
-            gamma[j] = norm(col)^2
-            lower    = max(lower, gamma[j])
+            col       = view(A, (s+1):(s+c), j)
+            gamma[j] -= norm(col)^2
+            mu        = max(mu, gamma[j])
         end
+
+        s += c
+        t -= c
 
         # if there are still non-tracked columns, then we choose a small 
         # number of them to make tracked, and we measure their residual
@@ -107,34 +109,31 @@ function cceqr!(A::Matrix{Float64};
         if s+t < n
             r = ceil(Int64, rho*(n-s-c-t))
             order_reblock!(A, jpvt, s+t+1, n, gamma, r)
-            apply_qt!(A, V, T, 1, s+c, s+t+1, s+t+r)
+            apply_qt!(A, V, T, 1, s, s+t+1, s+t+r)
 
             for j = (s+t+1):(s+t+r)
-                col      = view(A, (s+c+1):m, j)
-                gamma[j] = norm(col)^2
-                lower    = max(lower, gamma[j])
+                col       = view(A, 1:s, j)
+                gamma[j] -= norm(col)^2
+                mu        = max(mu, gamma[j])
             end
 
             t += r
 
             # decide which remaining columns to bring into the tracked set
 
-            r = threshold_reblock!(A, jpvt, s+t+1, n, gamma, (1-eta)*lower)
+            r = threshold_reblock!(A, jpvt, s+t+1, n, gamma, (1-eta)*mu)
 
             # measure their residual norms
 
-            (r > 0) && apply_qt!(A, V, T, 1, s+c, s+t+1, s+t+r)
+            (r > 0) && apply_qt!(A, V, T, 1, s, s+t+1, s+t+r)
 
             for j = (s+t+1):(s+t+r)
-                col       = view(A, 1:(s+c), j)
+                col       = view(A, 1:s, j)
                 gamma[j] -= norm(col)^2
             end
 
             t  += r
         end
-
-        s += c
-        t -= c
     end
 
     if project_all
