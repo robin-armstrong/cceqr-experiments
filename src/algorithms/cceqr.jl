@@ -3,19 +3,17 @@ using LinearAlgebra
 include("cceqr_utils.jl")
 
 """
-cceqr!(A; k = minimum(size(A)), rho = 1e-4, eta = .1, project_all = false)
+cceqr!(A; k = minimum(size(A)), rho = 1e-4, project_all = false)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
 of `A`, modifying `A` in place. Use a "collect, commit, expand" strategy with block
-proportion `rho` and expansion threshold `eta`. If `project_all == true`, then apply
-Householder reflections to all columns yielding a complete `R` factor. Returns the
-column permutation, the number of cycles used, the average pivoting block size per
-cycle, and the final size of the tracked set.
+proportion `rho`. If `project_all == true`, then apply Householder reflections to all
+columns yielding a complete `R` factor. Returns the column permutation, the number of
+cycles used, the average pivoting block size per cycle, and the final size of the tracked set.
 """
 function cceqr!(A::Matrix{Float64};
                 k::Int64 = minimum(size(A)),
                 rho::Float64 = 1e-4,
-                eta::Float64 = .1,
                 project_all::Bool = false)
 
     m, n = size(A)
@@ -26,8 +24,6 @@ function cceqr!(A::Matrix{Float64};
         throw(ArgumentError("k cannot exceed the smaller dimension of the input matrix"))
     elseif rho*(1 - rho) <= 0
         throw(ArgumentError("rho must lie strictly between 0 and 1"))
-    elseif eta*(1 - eta) <= 0
-        throw(ArgumentError("eta must lie strictly between 0 and 1"))
     end
 
     gamma = zeros(n)         # residual column norms
@@ -47,8 +43,8 @@ function cceqr!(A::Matrix{Float64};
     
     # compute column permutation in cycles
 
-    cycle = 0
-    mu = 0.
+    cycle  = 0
+    mu     = 0.
 
     while s < k
         cycle += 1
@@ -66,9 +62,12 @@ function cceqr!(A::Matrix{Float64};
         min_dim = minimum(size(block))
         qrobj   = qr!(block, ColumnNorm())
 
-        # decide how many pivot choices to commit
+        # decide how many pivot choices to commit. Note that mu = 0 at
+        # the first cycle, but this is not a problem, for at the first
+        # cycle delta serves as an upper bound on *all* non-candidate
+        # residual norms
 
-        c = sum(diag(qrobj.factors).^2 .>= delta)
+        c = sum(diag(qrobj.factors).^2 .>= max(delta, mu))
         c = min(c, k-s)
 
         # permute columns accordingly
@@ -91,37 +90,21 @@ function cceqr!(A::Matrix{Float64};
         # to the range of A[:, 1:(s+c)], starting by measuring residual
         # norms in the block we just factorized.
 
-        mu = 0.
+        maxres = 0.
         
         for j = (s+c+1):(s+t)
             col       = view(A, (s+1):(s+c), j)
             gamma[j] -= norm(col)^2
-            mu        = max(mu, gamma[j])
+            maxres    = max(maxres, gamma[j])
         end
 
         s += c
         t -= c
-
-        # if there are still non-tracked columns, then we choose a small 
-        # number of them to make tracked, and we measure their residual
-        # column norms as well to update the lower bound.
-
+        
         if s+t < n
-            r = ceil(Int64, rho*(n-s-c-t))
-            order_reblock!(A, jpvt, s+t+1, n, gamma, r)
-            apply_qt!(A, V, T, 1, s, s+t+1, s+t+r)
-
-            for j = (s+t+1):(s+t+r)
-                col       = view(A, 1:s, j)
-                gamma[j] -= norm(col)^2
-                mu        = max(mu, gamma[j])
-            end
-
-            t += r
-
             # decide which remaining columns to bring into the tracked set
 
-            r = threshold_reblock!(A, jpvt, s+t+1, n, gamma, (1-eta)*mu)
+            r, mu = threshold_reblock!(A, jpvt, s+t+1, n, gamma, maxres)
 
             # measure their residual norms
 
