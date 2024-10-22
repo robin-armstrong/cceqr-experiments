@@ -13,9 +13,7 @@ include("../../algorithms/cceqr.jl")
 rng         = MersenneTwister(1)
 k           = 50
 n_range     = round.(Int64, exp10.(range(2, 6, 15)))
-eta         = 1e-4
 rho         = 1e-2
-reflect_all = false
 numtrials   = 10
 readme      = "Comparing GEQP3 and CCEQR on Gaussian random test matrices of various sizes."
 
@@ -32,15 +30,13 @@ if !plot_only
         flush(stdout)
     end
 
-    function run_gaussian_experiment(rng, k, n_range, eta, rho, reflect_all, numtrials, readme, destination)
+    function run_gaussian_experiment(rng, k, n_range, rho, numtrials, readme, destination)
         # recording information about this experiment
 
         logstr  = "rng         = "*string(rng)*"\n"
         logstr *= "k           = "*string(k)*"\n"
         logstr *= "n_range     = "*string(n_range)*"\n"
-        logstr *= "eta         = "*string(eta)*"\n"
         logstr *= "rho         = "*string(rho)*"\n"
-        logstr *= "reflect_all = "*string(reflect_all)*"\n"
         logstr *= "numtrials   = "*string(numtrials)*"\n"
         logstr *= "\n"*readme*"\n"
 
@@ -69,7 +65,7 @@ if !plot_only
             p_geqp3 = qr!(tmp, ColumnNorm()).p
 
             copy!(tmp, A)
-            p_cceqr, _, _, _ = cceqr!(tmp, rho = rho, eta = eta, project_all = reflect_all)
+            p_cceqr, _, _, _ = cceqr!(tmp, rho = rho)
 
             if(p_geqp3[1:k] != p_cceqr)
                 j = 1
@@ -78,7 +74,7 @@ if !plot_only
                 expected = p_geqp3[j]
                 got      = p_cceqr[j]
 
-                @save destination*"_failure_data.jld2" A rho eta j expected got
+                @save destination*"_failure_data.jld2" A rho j expected got
                 throw(error("incorrect permutation from cceqr"))
             end
 
@@ -90,14 +86,14 @@ if !plot_only
                 geqp3_runtimes[n_index, trial_index] = @elapsed qr!(tmp, ColumnNorm())
 
                 copy!(tmp, A)
-                cceqr_runtimes[n_index, trial_index] = @elapsed cceqr!(tmp, rho = rho, eta = eta, project_all = reflect_all)
+                cceqr_runtimes[n_index, trial_index] = @elapsed cceqr!(tmp, rho = rho)
             end
 
             @save destination*"_data.jld2" k n_range geqp3_runtimes cceqr_runtimes
         end
     end
 
-    run_gaussian_experiment(rng, k, n_range, eta, rho, reflect_all, numtrials, readme, destination)
+    run_gaussian_experiment(rng, k, n_range, rho, numtrials, readme, destination)
 end
 
 ##########################################################################
