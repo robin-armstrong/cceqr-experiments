@@ -3,18 +3,18 @@ using LinearAlgebra
 include("cceqr_utils.jl")
 
 """
-cceqr!(A; k = minimum(size(A)), rho = 1e-4, project_all = false)
+cceqr!(A; k = minimum(size(A)), rho = 1e-4, full = false)
 
 Compute the first `k` entries of the column permutation for a CPQR factorization
 of `A`, modifying `A` in place. Use a "collect, commit, expand" strategy with block
-proportion `rho`. If `project_all == true`, then apply Householder reflections to all
+proportion `rho`. If `full == true`, then apply Householder reflections to all
 columns yielding a complete `R` factor. Returns the column permutation, the number of
 cycles used, the average pivoting block size per cycle, and the final size of the tracked set.
 """
 function cceqr!(A::Matrix{Float64};
                 k::Int64 = minimum(size(A)),
                 rho::Float64 = 1e-4,
-                project_all::Bool = false)
+                full::Bool = false)
 
     m, n = size(A)
 
@@ -119,7 +119,7 @@ function cceqr!(A::Matrix{Float64};
         end
     end
 
-    if project_all
+    if full
         apply_qt!(A, V, T, 1, s, s+t+1, n)
     end
 

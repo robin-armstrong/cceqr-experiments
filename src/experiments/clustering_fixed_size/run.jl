@@ -22,11 +22,11 @@ noise  = 1.
 kernel    = "gaussian"  # type of kernel function      
 bandwidth = 10.         # bandwidth of kernel function
 
-rho_range = exp10.(range(-5, -.3, 10))
-numtrials = 10
+rho_range = exp10.(range(-5, -.3, 20))
+numtrials = 20
 
-plot_only   = false       # if "true" then data will be read from disk and not regenerated
-destination = "src/experiments/spectral_clustering/cluster"
+plot_only   = false     # if "true" then data will be read from disk and not regenerated
+destination = "src/experiments/clustering_fixed_size/cluster"
 readme      = "Comparing GEQP3 and CCEQR on a spectral clustering problem."
 
 ##########################################################################
@@ -44,7 +44,7 @@ if !plot_only
         flush(stdout)
     end
 
-    function run_cluster_experiment(rng, n, k, srange, noise, kernel, bandwidth,
+    function run_cluster_fixed_size(rng, n, k, srange, noise, kernel, bandwidth,
                                     rho_range, numtrials, destination, readme)
         
         logstr  = "rng       = "*string(rng)*"\n"
@@ -85,11 +85,12 @@ if !plot_only
 
         # setting up arrays to record data
 
-        cceqr_cycles = zeros(length(srange), length(rho_range))
-        cceqr_avgblk = zeros(length(srange), length(rho_range))
-        cceqr_active = zeros(length(srange), length(rho_range))
-        cceqr_time   = zeros(length(srange), length(rho_range), numtrials)
-        geqp3_time   = zeros(numtrials)
+        cceqr_cycles    = zeros(length(srange), length(rho_range))
+        cceqr_avgblk    = zeros(length(srange), length(rho_range))
+        cceqr_active    = zeros(length(srange), length(rho_range))
+        cceqr_time_cssp = zeros(length(srange), length(rho_range), numtrials)
+        cceqr_time_cpqr = zeros(length(srange), length(rho_range), numtrials)
+        geqp3_time      = zeros(numtrials)
 
         # preallocating some arrays for setting up the clustering problem
         data    = zeros(n, k)
@@ -211,15 +212,19 @@ if !plot_only
 
                     copy!(tmp, Vt)
                     t = @elapsed cceqr!(tmp, rho = rho)
-                    cceqr_time[scale_idx, rho_idx, trial_idx] = t
+                    cceqr_time_cssp[scale_idx, rho_idx, trial_idx] = t
+
+                    copy!(tmp, Vt)
+                    t = @elapsed cceqr!(tmp, rho = rho, full = true)
+                    cceqr_time_cpqr[scale_idx, rho_idx, trial_idx] = t
                 end
 
-                @save destination*"_data.jld2" n k srange rho_range skill_learned skill_random numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
+                @save destination*"_data.jld2" n k srange rho_range skill_learned skill_random numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
             end
         end
     end
 
-    run_cluster_experiment(rng, n, k, srange, noise, kernel, bandwidth,
+    run_cluster_fixed_size(rng, n, k, srange, noise, kernel, bandwidth,
                            rho_range, numtrials, destination, readme)
 end
 
@@ -227,53 +232,36 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-@load destination*"_data.jld2" n k srange rho_range skill_learned skill_random numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
+@load destination*"_data.jld2" n k srange rho_range skill_learned skill_random numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
 
-cceqr_mean_times = zeros(length(srange), length(rho_range))
+cceqr_mean_cssp = mean(cceqr_time_cssp, dims = 3)
+cceqr_mean_cpqr = mean(cceqr_time_cpqr, dims = 3)
+geqp3_mean      = mean(geqp3_time)
 
-for i = 1:length(srange)
-    for j = 1:length(rho_range)
-        no_outliers = (cceqr_time[i, j, :] .< 100.)
-        cceqr_mean_times[i,j] = mean(cceqr_time[i, j, no_outliers])
-    end
-end
+cceqr_mean_cssp = reshape(cceqr_mean_cssp, (length(srange), length(rho_range)))
+cceqr_mean_cpqr = reshape(cceqr_mean_cpqr, (length(srange), length(rho_range)))
 
-geqp3_mean = mean(geqp3_time)
-time_comp  = geqp3_mean*cceqr_mean_times.^(-1)
+time_comp_cssp = geqp3_mean*cceqr_mean_cssp.^(-1)
+time_comp_cpqr = geqp3_mean*cceqr_mean_cpqr.^(-1)
+
+extremes = extrema([time_comp_cssp; time_comp_cpqr])
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (800, 700))
+fig = Figure(size = (900, 400))
 
-time = Axis(fig[1,1],
-            title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$",
-            xlabel = L"$\log_{10} \,\rho$",
-            ylabel = "Cluster Separation"
-           )
-heatmap!(time, log10.(rho_range), srange, time_comp)
-Colorbar(fig[1,2], limits = extrema(time_comp))
+time_cssp = Axis(fig[1,1],
+                 title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (CSSP Only)",
+                 xlabel = L"$\log_{10} \,\rho$",
+                 ylabel = "Cluster Separation"
+                )
+heatmap!(time_cssp, log10.(rho_range), srange, time_comp_cssp, colorrange = extremes)
 
-blocks = Axis(fig[1,3],
-              title  = "Average Block Percentage Per Cycle",
-              xlabel = L"$\log_{10} \,\rho$",
-              ylabel = "Cluster Separation"
-             )
-heatmap!(blocks, log10.(rho_range), srange, cceqr_avgblk)
-Colorbar(fig[1,4], limits = extrema(cceqr_avgblk))
-
-active = Axis(fig[2,1],
-              title  = "Final Active Set Percentage",
-              xlabel = L"$\log_{10} \,\rho$",
-              ylabel = "Cluster Separation"
-             )
-heatmap!(active, log10.(rho_range), srange, cceqr_active)
-Colorbar(fig[2,2], limits = extrema(cceqr_active))
-
-cycles = Axis(fig[2,3],
-              title  = "CCEQR Cycle Count",
-              xlabel = L"$\log_{10} \,\rho$",
-              ylabel = "Cluster Separation"
-             )
-heatmap!(cycles, log10.(rho_range), srange, cceqr_cycles)
-Colorbar(fig[2,4], limits = extrema(cceqr_cycles))
+time_cpqr = Axis(fig[1,2],
+                 title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (Full CPQR)",
+                 xlabel = L"$\log_{10} \,\rho$",
+                 ylabel = "Cluster Separation"
+                )
+heatmap!(time_cpqr, log10.(rho_range), srange, time_comp_cpqr, colorrange = extremes)
+Colorbar(fig[1,3], limits = extremes)
 
 save(destination*"_plot.pdf", fig)
