@@ -244,24 +244,24 @@ cceqr_mean_cpqr = reshape(cceqr_mean_cpqr, (length(srange), length(rho_range)))
 time_comp_cssp = geqp3_mean*cceqr_mean_cssp.^(-1)
 time_comp_cpqr = geqp3_mean*cceqr_mean_cpqr.^(-1)
 
-extremes = extrema([time_comp_cssp; time_comp_cpqr])
+extremes = extrema(log10.([time_comp_cssp; time_comp_cpqr]))
 
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (900, 400))
 
 time_cssp = Axis(fig[1,1],
-                 title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (CSSP Only)",
+                 title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (CSSP Only)",
                  xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = "Cluster Separation"
+                 ylabel = L"\text{Cluster Separation}"
                 )
-heatmap!(time_cssp, log10.(rho_range), srange, time_comp_cssp, colorrange = extremes)
+heatmap!(time_cssp, log10.(rho_range), srange, transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = extremes)
 
 time_cpqr = Axis(fig[1,2],
-                 title  = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (Full CPQR)",
+                 title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (Full CPQR)",
                  xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = "Cluster Separation"
+                 ylabel = L"\text{Cluster Separation}"
                 )
-heatmap!(time_cpqr, log10.(rho_range), srange, time_comp_cpqr, colorrange = extremes)
-Colorbar(fig[1,3], limits = extremes)
+heatmap!(time_cpqr, log10.(rho_range), srange, transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = extremes)
+Colorbar(fig[1,3], colormap = :vik, limits = extremes)
 
 save(destination*"_plot.pdf", fig)
