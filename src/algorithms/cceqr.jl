@@ -35,11 +35,10 @@ function cceqr!(A::Matrix{Float64};
 
     avg_block = 0.
 
-    # determine column norms
+    # determine squared column norms
 
-    for j = 1:n
-        gamma[j] = norm(A[:,j])^2
-    end
+    broadcast!(norm, gamma, eachcol(A))
+    gamma .*= gamma
     
     # compute column permutation in cycles
 

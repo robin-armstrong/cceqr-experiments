@@ -26,7 +26,7 @@ rho_range = exp10.(range(-5, -.3, 20))
 numtrials = 20
 
 plot_only   = false     # if "true" then data will be read from disk and not regenerated
-destination = "src/experiments/clustering_fixed_size/cluster"
+destination = "src/experiments/clustering_fixed_size/cluster_fixedsize"
 readme      = "Comparing GEQP3 and CCEQR on a spectral clustering problem."
 
 ##########################################################################
@@ -244,7 +244,7 @@ cceqr_mean_cpqr = reshape(cceqr_mean_cpqr, (length(srange), length(rho_range)))
 time_comp_cssp = geqp3_mean*cceqr_mean_cssp.^(-1)
 time_comp_cpqr = geqp3_mean*cceqr_mean_cpqr.^(-1)
 
-extremes = extrema(log10.([time_comp_cssp; time_comp_cpqr]))
+L = maximum(abs.(log10.([time_comp_cssp; time_comp_cpqr])))
 
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (900, 400))
@@ -254,14 +254,14 @@ time_cssp = Axis(fig[1,1],
                  xlabel = L"$\log_{10} \,\rho$",
                  ylabel = L"\text{Cluster Separation}"
                 )
-heatmap!(time_cssp, log10.(rho_range), srange, transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = extremes)
+heatmap!(time_cssp, log10.(rho_range), srange, transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = (-L, L))
 
 time_cpqr = Axis(fig[1,2],
                  title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (Full CPQR)",
                  xlabel = L"$\log_{10} \,\rho$",
                  ylabel = L"\text{Cluster Separation}"
                 )
-heatmap!(time_cpqr, log10.(rho_range), srange, transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = extremes)
-Colorbar(fig[1,3], colormap = :vik, limits = extremes)
+heatmap!(time_cpqr, log10.(rho_range), srange, transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = (-L, L))
+Colorbar(fig[1,3], colormap = :vik, limits = (-L, L))
 
 save(destination*"_plot.pdf", fig)

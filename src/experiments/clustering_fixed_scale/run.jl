@@ -14,7 +14,7 @@ include("../../algorithms/pivchol.jl")
 
 rng = MersenneTwister(2)
 
-nrange = round.(Int64, exp10.(range(2, 6, 10)))     # number of data points, must be > 4*k
+nrange = round.(Int64, exp10.(range(2, 6, 9)))     # number of data points, must be > 4*k
 k      = 20                                         # number of Gaussian mixture components
 scale  = 6.
 noise  = 1.
@@ -26,7 +26,7 @@ rho_range = exp10.(range(-5, -.3, 20))
 numtrials = 20
 
 plot_only   = false     # if "true" then data will be read from disk and not regenerated
-destination = "src/experiments/clustering_fixed_scale/cluster"
+destination = "src/experiments/clustering_fixed_scale/cluster_fixedscale"
 readme      = "Comparing GEQP3 and CCEQR on a spectral clustering problem."
 
 ##########################################################################
@@ -90,7 +90,7 @@ if !plot_only
         cceqr_active    = zeros(length(nrange), length(rho_range))
         cceqr_time_cssp = zeros(length(nrange), length(rho_range), numtrials)
         cceqr_time_cpqr = zeros(length(nrange), length(rho_range), numtrials)
-        geqp3_time      = zeros(numtrials)
+        geqp3_time      = zeros(length(nrange), numtrials)
 
         totaltrials = length(rho_range)*length(nrange)*numtrials
         trialcount  = 0
@@ -128,9 +128,9 @@ if !plot_only
             copy!(tmp, Vt)
             p_geqp3 = qr!(tmp, ColumnNorm()).p[1:k]
 
-            for t = 1:numtrials
+            for trial_idx = 1:numtrials
                 copy!(tmp, Vt)
-                geqp3_time[t] = @elapsed qr(tmp, ColumnNorm())
+                geqp3_time[n_idx, trial_idx] = @elapsed qr(tmp, ColumnNorm())
             end
 
             s2 = svd(Vt[:, p_geqp3])
@@ -236,15 +236,15 @@ end
 
 cceqr_mean_cssp = mean(cceqr_time_cssp, dims = 3)
 cceqr_mean_cpqr = mean(cceqr_time_cpqr, dims = 3)
-geqp3_mean      = mean(geqp3_time)
+geqp3_mean      = mean(geqp3_time, dims = 2)*ones(1, length(rho_range))
 
 cceqr_mean_cssp = reshape(cceqr_mean_cssp, (length(nrange), length(rho_range)))
 cceqr_mean_cpqr = reshape(cceqr_mean_cpqr, (length(nrange), length(rho_range)))
 
-time_comp_cssp = geqp3_mean*cceqr_mean_cssp.^(-1)
-time_comp_cpqr = geqp3_mean*cceqr_mean_cpqr.^(-1)
+time_comp_cssp = geqp3_mean.*cceqr_mean_cssp.^(-1)
+time_comp_cpqr = geqp3_mean.*cceqr_mean_cpqr.^(-1)
 
-extremes = extrema(log10.([time_comp_cssp; time_comp_cpqr]))
+L = maximum(abs.(log10.([time_comp_cssp; time_comp_cpqr])))
 
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (900, 400))
@@ -254,14 +254,14 @@ time_cssp = Axis(fig[1,1],
                  xlabel = L"$\log_{10} \,\rho$",
                  ylabel = L"Dataset Size ($\log_{10} n$)",
                 )
-heatmap!(time_cssp, log10.(rho_range), log10.(nrange), transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = extremes)
+heatmap!(time_cssp, log10.(rho_range), log10.(nrange), transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = (-L, L))
 
 time_cpqr = Axis(fig[1,2],
                  title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (Full CPQR)",
                  xlabel = L"$\log_{10} \,\rho$",
                  ylabel = L"Dataset Size ($\log_{10} n$)",
                 )
-heatmap!(time_cpqr, log10.(rho_range), log10.(nrange), transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = extremes)
-Colorbar(fig[1,3], colormap = :vik, limits = extremes)
+heatmap!(time_cpqr, log10.(rho_range), log10.(nrange), transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = (-L, L))
+Colorbar(fig[1,3], colormap = :vik, limits = (-L, L))
 
 save(destination*"_plot.pdf", fig)
