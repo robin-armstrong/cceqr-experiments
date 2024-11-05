@@ -2,7 +2,7 @@
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "85368f9b94d14fe7d6abfac671b6a41cfbf1fa00"
+project_hash = "59d40a4a78bc4efb47e647c650de6cfbe75f2677"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -438,6 +438,12 @@ version = "0.11.0"
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
+
+[[deps.Hadamard]]
+deps = ["AbstractFFTs", "FFTW", "LinearAlgebra"]
+git-tree-sha1 = "5725efe47336ae937a0cc9613b1ddab0121c3bb6"
+uuid = "4a05ff16-5f95-55f4-bb53-bb3f467c689a"
+version = "1.6.0"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll"]
