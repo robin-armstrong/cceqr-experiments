@@ -25,7 +25,7 @@ bandwidth = 10.         # bandwidth of kernel function
 rho_range = exp10.(range(-5, -.3, 20))
 numtrials = 20
 
-plot_only   = false     # if "true" then data will be read from disk and not regenerated
+plot_only   = true     # if "true" then data will be read from disk and not regenerated
 destination = "src/experiments/clustering_fixed_size/cluster_fixedsize"
 readme      = "Comparing GEQP3 and CCEQR on a spectral clustering problem."
 
@@ -234,15 +234,15 @@ end
 
 @load destination*"_data.jld2" n k srange rho_range skill_learned skill_random numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
 
-cceqr_mean_cssp = mean(cceqr_time_cssp, dims = 3)
-cceqr_mean_cpqr = mean(cceqr_time_cpqr, dims = 3)
-geqp3_mean      = mean(geqp3_time)
+cceqr_median_cssp = median(cceqr_time_cssp, dims = 3)
+cceqr_median_cpqr = median(cceqr_time_cpqr, dims = 3)
+geqp3_median      = median(geqp3_time)
 
-cceqr_mean_cssp = reshape(cceqr_mean_cssp, (length(srange), length(rho_range)))
-cceqr_mean_cpqr = reshape(cceqr_mean_cpqr, (length(srange), length(rho_range)))
+cceqr_median_cssp = reshape(cceqr_median_cssp, (length(srange), length(rho_range)))
+cceqr_median_cpqr = reshape(cceqr_median_cpqr, (length(srange), length(rho_range)))
 
-time_comp_cssp = geqp3_mean*cceqr_mean_cssp.^(-1)
-time_comp_cpqr = geqp3_mean*cceqr_mean_cpqr.^(-1)
+time_comp_cssp = geqp3_median*cceqr_median_cssp.^(-1)
+time_comp_cpqr = geqp3_median*cceqr_median_cpqr.^(-1)
 
 L = maximum(abs.(log10.([time_comp_cssp; time_comp_cpqr])))
 
