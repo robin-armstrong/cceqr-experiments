@@ -244,10 +244,10 @@ cceqr_median_cpqr = reshape(cceqr_median_cpqr, (length(nrange), length(rho_range
 time_comp_cssp = geqp3_median.*cceqr_median_cssp.^(-1)
 time_comp_cpqr = geqp3_median.*cceqr_median_cpqr.^(-1)
 
-L = maximum(abs.(log10.([time_comp_cssp; time_comp_cpqr])))
+L = 1
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (900, 400))
+fig = Figure(size = (600, 300))
 
 time_cssp = Axis(fig[1,1],
                  title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (CSSP Only)",

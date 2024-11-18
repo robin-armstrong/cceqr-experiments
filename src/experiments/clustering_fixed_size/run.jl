@@ -25,7 +25,7 @@ bandwidth = 10.         # bandwidth of kernel function
 rho_range = exp10.(range(-5, -.3, 20))
 numtrials = 20
 
-plot_only   = true     # if "true" then data will be read from disk and not regenerated
+plot_only   = false     # if "true" then data will be read from disk and not regenerated
 destination = "src/experiments/clustering_fixed_size/cluster_fixedsize"
 readme      = "Comparing GEQP3 and CCEQR on a spectral clustering problem."
 
@@ -244,22 +244,22 @@ cceqr_median_cpqr = reshape(cceqr_median_cpqr, (length(srange), length(rho_range
 time_comp_cssp = geqp3_median*cceqr_median_cssp.^(-1)
 time_comp_cpqr = geqp3_median*cceqr_median_cpqr.^(-1)
 
-L = maximum(abs.(log10.([time_comp_cssp; time_comp_cpqr])))
+L = 1.2
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (900, 400))
+fig = Figure(size = (600, 300))
 
 time_cssp = Axis(fig[1,1],
                  title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (CSSP Only)",
                  xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = L"\text{Cluster Separation}"
+                 ylabel = L"$\text{Cluster Separation } (\ell)$"
                 )
 heatmap!(time_cssp, log10.(rho_range), srange, transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = (-L, L))
 
 time_cpqr = Axis(fig[1,2],
                  title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (Full CPQR)",
                  xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = L"\text{Cluster Separation}"
+                 ylabel = L"$\text{Cluster Separation }(\ell)$"
                 )
 heatmap!(time_cpqr, log10.(rho_range), srange, transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = (-L, L))
 Colorbar(fig[1,3], colormap = :vik, limits = (-L, L))
