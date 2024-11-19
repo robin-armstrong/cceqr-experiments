@@ -40,11 +40,12 @@ if !plot_only
 
         fprintln(logstr)
 
-        cceqr_time    = zeros(length(rho_range), numtrials)
-        cceqr_cycles  = zeros(length(rho_range))
-        cceqr_avgblk  = zeros(length(rho_range))
-        cceqr_active  = zeros(length(rho_range))
-        geqp3_time    = zeros(numtrials)
+        cceqr_time_cssp = zeros(length(rho_range), numtrials)
+        cceqr_time_cpqr = zeros(length(rho_range), numtrials)
+        cceqr_cycles    = zeros(length(rho_range))
+        cceqr_avgblk    = zeros(length(rho_range))
+        cceqr_active    = zeros(length(rho_range))
+        geqp3_time      = zeros(numtrials)
 
         totaltrials = length(rho_range)*numtrials
         trialcount  = 0
@@ -71,6 +72,9 @@ if !plot_only
             copy!(Vt, Psi)
             p_cceqr, blocks, avg_b, act = cceqr!(Vt, rho = rho)
 
+            copy!(Vt, Psi)
+            p_cceqr, blocks, avg_b, act = cceqr!(Vt, rho = rho, full = true)
+
             if(p_geqp3[1:m] != p_cceqr)
                 j = 1
                 while(p_geqp3[j] == p_cceqr[j]) j += 1 end
@@ -93,10 +97,14 @@ if !plot_only
 
                 copy!(Vt, Psi)
                 t = @elapsed cceqr!(Vt, rho = rho)
-                cceqr_time[rho_idx, trial_index] = t
+                cceqr_time_cssp[rho_idx, trial_index] = t
+
+                copy!(Vt, Psi)
+                t = @elapsed cceqr!(Vt, rho = rho, full = true)
+                cceqr_time_cpqr[rho_idx, trial_index] = t
             end
 
-            @save destination*"_data.jld2" molecule rho_range numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
+            @save destination*"_data.jld2" molecule rho_range numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
         end
     end
 
@@ -107,30 +115,27 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-@load destination*"_data.jld2" molecule rho_range numtrials geqp3_time cceqr_time cceqr_cycles cceqr_avgblk cceqr_active
+@load destination*"_data.jld2" molecule rho_range numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
 
-cceqr_mean_times = zeros(length(rho_range))
-
-for i = 1:length(rho_range)
-    no_outliers = (cceqr_time[i, :] .< 100.)
-    cceqr_mean_times[i] = mean(cceqr_time[i, no_outliers])
-end
-
-geqp3_mean = mean(geqp3_time)
-time_comp  = geqp3_mean*cceqr_mean_times.^(-1)
+cceqr_median_cssp  = vec(median(cceqr_time_cssp, dims = 2))
+cceqr_median_cpqr  = vec(median(cceqr_time_cpqr, dims = 2))
+geqp3_median_times = median(geqp3_time)
+tmin               = .8*min(geqp3_median_times, minimum(cceqr_median_cssp). minimum(cceqr_median_cpqr))
+tmax               = 1.3*max(geqp3_median_times, maximum(cceqr_median_cssp), maximum(cceqr_median_cpqr))
 
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (800, 800))
 
 time = Axis(fig[1,1],
-            limits = (nothing, nothing, 1, 20),
+            limits = (nothing, nothing, tmin, tmax),
             xlabel = L"$\rho$",
             ylabel = "Runtime (s)",
             xscale = log10
            )
 
-lines!(time, rho_range, cceqr_mean_times, color = :blue, label = "CCEQR")
-hlines!(time, geqp3_mean, color = :red, linestyle = :dash, label = "GEQP3")
+scatterlines!(time, rho_range, cceqr_median_cssp, color = :blue, marker = :square, label = "CCEQR (CSSP only)")
+scatterlines!(time, rho_range, cceqr_median_cssp, color = :green, marker = :circle, label = "CCEQR (full CPQR)")
+hlines!(time, geqp3_median_times, color = :red, linestyle = :dash, label = "GEQP3")
 axislegend(time, position = :lt)
 
 block = Axis(fig[1,2],
