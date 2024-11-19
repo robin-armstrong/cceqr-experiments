@@ -1,9 +1,8 @@
 using LinearAlgebra
 using CairoMakie
 using StatsBase
+using CCEQR
 using JLD2
-
-include("../../algorithms/cceqr.jl")
 
 ##########################################################################
 ######################## SCRIPT PARAMETERS ###############################

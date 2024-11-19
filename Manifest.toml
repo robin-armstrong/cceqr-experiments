@@ -2,7 +2,7 @@
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "59d40a4a78bc4efb47e647c650de6cfbe75f2677"
+project_hash = "6a0f7f92eeee068053b6ec117b5baf26863b23a4"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -80,6 +80,14 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+1"
+
+[[deps.CCEQR]]
+deps = ["LinearAlgebra", "Random", "Test"]
+git-tree-sha1 = "cdf77ae6fb6cfb07d255c721fe3e37f712974dc1"
+repo-rev = "main"
+repo-url = "https://github.com/robin-armstrong/CCEQR.git"
+uuid = "c98000fe-ed63-4dc9-8308-f43d7e5c4caa"
+version = "1.0.0"
 
 [[deps.CEnum]]
 git-tree-sha1 = "389ad5c84de1ae7cf0e28e381131c98ea87d54fc"

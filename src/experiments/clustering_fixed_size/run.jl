@@ -3,9 +3,9 @@ using CairoMakie
 using StatsBase
 using Debugger
 using Random
+using CCEQR
 using JLD2
 
-include("../../algorithms/cceqr.jl")
 include("../../algorithms/pivchol.jl")
 
 ##########################################################################
