@@ -120,42 +120,27 @@ end
 cceqr_median_cssp  = vec(median(cceqr_time_cssp, dims = 2))
 cceqr_median_cpqr  = vec(median(cceqr_time_cpqr, dims = 2))
 geqp3_median_times = median(geqp3_time)
-tmin               = .8*min(geqp3_median_times, minimum(cceqr_median_cssp). minimum(cceqr_median_cpqr))
-tmax               = 1.3*max(geqp3_median_times, maximum(cceqr_median_cssp), maximum(cceqr_median_cpqr))
+tmin               = .8*min(geqp3_median_times, minimum(cceqr_median_cssp), minimum(cceqr_median_cpqr))
+tmax               = 1.5*max(geqp3_median_times, maximum(cceqr_median_cssp), maximum(cceqr_median_cpqr))
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (800, 800))
+fig = Figure(size = (650, 325))
 
 time = Axis(fig[1,1],
             limits = (nothing, nothing, tmin, tmax),
             xlabel = L"$\rho$",
-            ylabel = "Runtime (s)",
+            ylabel = L"\text{Runtime (s)}",
             xscale = log10
            )
 
-scatterlines!(time, rho_range, cceqr_median_cssp, color = :blue, marker = :square, label = "CCEQR (CSSP only)")
-scatterlines!(time, rho_range, cceqr_median_cssp, color = :green, marker = :circle, label = "CCEQR (full CPQR)")
+scatterlines!(time, rho_range, cceqr_median_cssp, color = :blue, marker = :diamond, label = "CCEQR (CSSP only)")
+scatterlines!(time, rho_range, cceqr_median_cpqr, color = :green, marker = :circle, label = "CCEQR (full CPQR)")
 hlines!(time, geqp3_median_times, color = :red, linestyle = :dash, label = "GEQP3")
 axislegend(time, position = :lt)
 
-block = Axis(fig[1,2],
-             xlabel = L"$\rho$",
-             ylabel = "Average Block Percentage",
-             xscale = log10,
-             yscale = log10
-            )
-lines!(block, rho_range, cceqr_avgblk, color = :blue)
-
-active = Axis(fig[2,1],
+cycles = Axis(fig[1,2],
               xlabel = L"$\rho$",
-              ylabel = "Final Active Set Percentage",
-              xscale = log10
-             )
-lines!(active, rho_range, cceqr_active, color = :blue)
-
-cycles = Axis(fig[2,2],
-              xlabel = L"$\rho$",
-              ylabel = "Number of Cycles",
+              ylabel = L"\text{Number of Cycles}",
               xscale = log10
              )
 lines!(cycles, rho_range, cceqr_cycles, color = :blue)
