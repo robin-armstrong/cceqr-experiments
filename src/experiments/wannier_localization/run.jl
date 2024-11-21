@@ -127,22 +127,34 @@ CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (650, 325))
 
 time = Axis(fig[1,1],
-            limits = (nothing, nothing, tmin, tmax),
-            xlabel = L"$\rho$",
-            ylabel = L"\text{Runtime (s)}",
-            xscale = log10
+            limits             = (nothing, nothing, tmin, tmax),
+            xlabel             = L"$\rho$",
+            xminorticksvisible = true,
+            xminorgridvisible  = true,
+            xminorticks        = IntervalsBetween(10),
+            xscale             = log10,
+            ylabel             = L"\text{Runtime (s)}",
+            yminorticksvisible = true,
+            yminorgridvisible  = true,
+            yminorticks        = IntervalsBetween(10)
            )
 
-scatterlines!(time, rho_range, cceqr_median_cssp, color = :blue, marker = :diamond, label = "CCEQR (CSSP only)")
-scatterlines!(time, rho_range, cceqr_median_cpqr, color = :green, marker = :circle, label = "CCEQR (full CPQR)")
-hlines!(time, geqp3_median_times, color = :red, linestyle = :dash, label = "GEQP3")
+scatterlines!(time, rho_range, cceqr_median_cssp, color = :blue, marker = :diamond, label = L"\text{CCEQR (CSSP only)}")
+scatterlines!(time, rho_range, cceqr_median_cpqr, color = :green, marker = :circle, label = L"\text{CCEQR (full CPQR)}")
+hlines!(time, geqp3_median_times, color = :red, linestyle = :dash, label = L"\text{GEQP3}")
 axislegend(time, position = :lt)
 
 cycles = Axis(fig[1,2],
-              xlabel = L"$\rho$",
-              ylabel = L"\text{Number of Cycles}",
-              xscale = log10
+              xlabel             = L"$\rho$",
+              xminorticksvisible = true,
+              xminorgridvisible  = true,
+              xminorticks        = IntervalsBetween(10),
+              xscale             = log10,
+              ylabel             = L"\text{CCEQR Cycle Count}",
+              yminorticksvisible = true,
+              yminorgridvisible  = true,
+              yminorticks        = IntervalsBetween(10)
              )
-lines!(cycles, rho_range, cceqr_cycles, color = :blue)
+lines!(cycles, rho_range, cceqr_cycles, color = :black)
 
 save(destination*"_plot.pdf", fig)
