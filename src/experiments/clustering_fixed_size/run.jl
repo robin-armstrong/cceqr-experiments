@@ -258,8 +258,14 @@ CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (600, 300))
 
 cdf = Axis(fig[1,1],
-           xlabel = L"\text{Column Norm Quantile}",
-           ylabel = L"\text{Column Norm CDF}",
+           xlabel             = L"\text{Column Norm Quantile}",
+           xminorticksvisible = true,
+           xminorgridvisible  = true,
+           xminorticks        = IntervalsBetween(5),
+           ylabel             = L"\text{Column Norm CDF}",
+           yminorticksvisible = true,
+           yminorgridvisible  = true,
+           yminorticks        = IntervalsBetween(5)
           )
 
 plotidx = round.(Int64, range(1, n, 15))
