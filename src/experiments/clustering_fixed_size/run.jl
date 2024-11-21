@@ -91,6 +91,9 @@ if !plot_only
         cceqr_time_cssp = zeros(length(srange), length(rho_range), numtrials)
         cceqr_time_cpqr = zeros(length(srange), length(rho_range), numtrials)
         geqp3_time      = zeros(numtrials)
+        sq_colnorms     = zeros(length(srange), n)
+        skill_learned   = zeros(length(srange))
+        skill_random    = zeros(length(srange))
 
         # preallocating some arrays for setting up the clustering problem
         data    = zeros(n, k)
@@ -123,7 +126,11 @@ if !plot_only
 
             copyto!(Vt, CartesianIndices((1:k, 1:n)), scratch', CartesianIndices((1:k, 1:n)))
 
-            fprintln("\nclustering data and benchmarking GEQP3...")
+            fprintln("\nmeasuring column norms...")
+
+            sq_colnorms[scale_idx, :] = [norm(Vt[:,j])^2 for j = 1:n]
+
+            fprintln("clustering data and benchmarking GEQP3...")
 
             copy!(tmp, Vt)
             p_geqp3 = qr!(tmp, ColumnNorm()).p[1:k]
@@ -169,44 +176,39 @@ if !plot_only
             # E[p(X, i)] where X ~ Gaussian(means[:,i], vars[i]*I)
             E(i) = (.5/sqrt(pi*vars[i]))^k
             
-            skill_learned = 0.
-            skill_random  = 0.
-            
             for i = 1:n
                 l_learned = labels[i]
                 l_random  = rand(rng, 1:k)
 
-                skill_learned += p(data[i,:], l_learned)/(n*E(l_learned))
-                skill_random  += p(data[i,:], l_random)/(n*E(l_random))
+                skill_learned[scale_idx] += p(data[i,:], l_learned)/(n*E(l_learned))
+                skill_random[scale_idx]  += p(data[i,:], l_random)/(n*E(l_random))
             end
 
-            fprintln("skill (learned labels): "*string(skill_learned))
-            fprintln("skill (random labels):  "*string(skill_random))
+            fprintln("skill (learned labels): "*string(skill_learned[scale_idx]))
+            fprintln("skill (random labels):  "*string(skill_random[scale_idx]))
             fprintln("\nmeasuring CCEQR runtimes...\n")
+            
+            for trial_idx = 1:numtrials
+                for (rho_idx, rho) in enumerate(rho_range)
+                    if trial_idx == 1
+                        # precompiling CCEQR and making sure it gives the right permutation
 
-            for (rho_idx, rho) in enumerate(rho_range)
-                # precompiling CCEQR and making sure it gives the right permutation
-                
-                copy!(tmp, Vt)
-                p_cceqr, blocks, avg_b, act = cceqr!(tmp, rho = rho)
+                        copy!(tmp, Vt)
+                        p_cceqr, blocks, avg_b, act = cceqr!(tmp, rho = rho)
+        
+                        if(p_cceqr != p_geqp3)
+                            j = 1
+                            while(p_geqp3[j] == p_cceqr[j]) j += 1 end
+        
+                            expected = p_geqp3[j]
+                            got      = p_cceqr[j]
+        
+                            copy!(tmp, Vt)
+                            @save destination*"_failure_data.jld2" Vt rho j expected got
+                            throw(error("incorrect permutation from CCEQR"))
+                        end
+                    end
 
-                if(p_cceqr != p_geqp3)
-                    j = 1
-                    while(p_geqp3[j] == p_cceqr[j]) j += 1 end
-
-                    expected = p_geqp3[j]
-                    got      = p_cceqr[j]
-
-                    copy!(tmp, Vt)
-                    @save destination*"_failure_data.jld2" Vt rho j expected got
-                    throw(error("incorrect permutation from CCEQR"))
-                end
-
-                cceqr_cycles[scale_idx, rho_idx] = blocks
-                cceqr_avgblk[scale_idx, rho_idx] = avg_b/n
-                cceqr_active[scale_idx, rho_idx] = act/n
-
-                for trial_idx = 1:numtrials
                     trialcount += 1
                     fprintln("    trial "*string(trialcount)*" of "*string(totaltrials)*"...")
 
@@ -218,9 +220,9 @@ if !plot_only
                     t = @elapsed cceqr!(tmp, rho = rho, full = true)
                     cceqr_time_cpqr[scale_idx, rho_idx, trial_idx] = t
                 end
-
-                @save destination*"_data.jld2" n k srange rho_range skill_learned skill_random numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
             end
+
+            @save destination*"_data.jld2" n k srange rho_range skill_learned skill_random sq_colnorms numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
         end
     end
 
@@ -232,7 +234,7 @@ end
 ######################## PLOTTING ########################################
 ##########################################################################
 
-@load destination*"_data.jld2" n k srange rho_range skill_learned skill_random numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
+@load destination*"_data.jld2" n k srange rho_range skill_learned skill_random sq_colnorms numtrials geqp3_time cceqr_time_cssp cceqr_time_cpqr cceqr_cycles cceqr_avgblk cceqr_active
 
 cceqr_median_cssp = median(cceqr_time_cssp, dims = 3)
 cceqr_median_cpqr = median(cceqr_time_cpqr, dims = 3)
@@ -244,24 +246,36 @@ cceqr_median_cpqr = reshape(cceqr_median_cpqr, (length(srange), length(rho_range
 time_comp_cssp = geqp3_median*cceqr_median_cssp.^(-1)
 time_comp_cpqr = geqp3_median*cceqr_median_cpqr.^(-1)
 
+colnrm_cdf = zeros(size(sq_colnorms))
+
+for i = 1:size(colnrm_cdf, 1)
+    colnrm_cdf[i,:] = cumsum(sort(sq_colnorms[i,:]))/k
+end
+
 L = 1.2
 
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (600, 300))
 
-time_cssp = Axis(fig[1,1],
+cdf = Axis(fig[1,1],
+           xlabel = L"\text{Column Norm Quantile}",
+           ylabel = L"\text{Column Norm CDF}",
+          )
+
+plotidx = round.(Int64, range(1, n, 15))
+scatterlines!(cdf, plotidx/n, colnrm_cdf[1,plotidx], color = :black, marker = :circle, label = L"\ell = 1")
+scatterlines!(cdf, plotidx/n, colnrm_cdf[5,plotidx], color = :purple, marker = :diamond, label = L"\ell = 5")
+scatterlines!(cdf, plotidx/n, colnrm_cdf[8,plotidx], color = :blue, marker = :utriangle, label = L"\ell = 8")
+scatterlines!(cdf, plotidx/n, colnrm_cdf[10,plotidx], color = :green, marker = :dtriangle, label = L"\ell = 10")
+axislegend(cdf, position = :lt)
+
+time_cssp = Axis(fig[1,2],
                  title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (CSSP Only)",
                  xlabel = L"$\log_{10} \,\rho$",
                  ylabel = L"$\text{Cluster Separation } (\ell)$"
                 )
 heatmap!(time_cssp, log10.(rho_range), srange, transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = (-L, L))
 
-time_cpqr = Axis(fig[1,2],
-                 title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (Full CPQR)",
-                 xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = L"$\text{Cluster Separation }(\ell)$"
-                )
-heatmap!(time_cpqr, log10.(rho_range), srange, transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = (-L, L))
 Colorbar(fig[1,3], colormap = :vik, limits = (-L, L))
 
 save(destination*"_plot.pdf", fig)
