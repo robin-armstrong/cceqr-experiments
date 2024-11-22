@@ -271,11 +271,17 @@ cdf = Axis(fig[1,1],
            yminorticks        = IntervalsBetween(5)
           )
 
-plotidx = round.(Int64, range(1, n, 15))
-scatterlines!(cdf, plotidx/n, colnrm_cdf[1,plotidx], color = :black, marker = :circle, label = L"\ell = 1")
-scatterlines!(cdf, plotidx/n, colnrm_cdf[5,plotidx], color = :purple, marker = :diamond, label = L"\ell = 5")
-scatterlines!(cdf, plotidx/n, colnrm_cdf[8,plotidx], color = :blue, marker = :utriangle, label = L"\ell = 8")
-scatterlines!(cdf, plotidx/n, colnrm_cdf[10,plotidx], color = :green, marker = :dtriangle, label = L"\ell = 10")
+lines_idx   = round.(Int64, range(1, n, 500))
+scatter_idx = round.(Int64, range(1, n, 15))
+
+lines!(cdf, lines_idx/n, colnrm_cdf[1,lines_idx], color = :black)
+lines!(cdf, lines_idx/n, colnrm_cdf[5,lines_idx], color = :purple)
+lines!(cdf, lines_idx/n, colnrm_cdf[8,lines_idx], color = :blue)
+lines!(cdf, lines_idx/n, colnrm_cdf[10,lines_idx], color = :green)
+scatter!(cdf, scatter_idx/n, colnrm_cdf[1,scatter_idx], color = :black, marker = :circle, label = L"\ell = 1")
+scatter!(cdf, scatter_idx/n, colnrm_cdf[5,scatter_idx], color = :purple, marker = :diamond, label = L"\ell = 5")
+scatter!(cdf, scatter_idx/n, colnrm_cdf[8,scatter_idx], color = :blue, marker = :utriangle, label = L"\ell = 8")
+scatter!(cdf, scatter_idx/n, colnrm_cdf[10,scatter_idx], color = :green, marker = :dtriangle, label = L"\ell = 10")
 axislegend(cdf, position = :lt)
 
 time_cssp = Axis(fig[1,2],
