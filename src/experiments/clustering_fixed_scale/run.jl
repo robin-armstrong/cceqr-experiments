@@ -188,7 +188,10 @@ if !plot_only
                 # precompiling CCEQR and making sure it gives the right permutation
                 
                 copy!(tmp, Vt)
-                p_cceqr, blocks, avg_b, act = cceqr!(tmp, rho = rho)
+                p_cceqr, blocks, avg_b, act  = cceqr!(tmp, rho = rho)
+                cceqr_cycles[n_idx, rho_idx] = blocks
+                cceqr_avgblk[n_idx, rho_idx] = avg_b
+                cceqr_active[n_idx, rho_idx] = act
 
                 if(p_cceqr != p_geqp3)
                     j = 1
