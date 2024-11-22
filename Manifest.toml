@@ -83,7 +83,7 @@ version = "1.0.8+1"
 
 [[deps.CCEQR]]
 deps = ["LinearAlgebra", "Random", "Test"]
-git-tree-sha1 = "40e0d7eaef8ae637a2307f065796cf815829b436"
+git-tree-sha1 = "b50b54bc0c6d0c3492014e76d4b0ce00b96e684e"
 repo-rev = "main"
 repo-url = "https://github.com/robin-armstrong/CCEQR.git"
 uuid = "c98000fe-ed63-4dc9-8308-f43d7e5c4caa"
