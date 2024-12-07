@@ -195,6 +195,7 @@ if !plot_only
 
                         copy!(tmp, Vt)
                         p_cceqr, blocks, avg_b, act      = cceqr!(tmp, rho = rho)
+                        p_cceqr                          = p_cceqr[1:k]
                         cceqr_cycles[scale_idx, rho_idx] = blocks
                         cceqr_avgblk[scale_idx, rho_idx] = avg_b
                         cceqr_active[scale_idx, rho_idx] = act

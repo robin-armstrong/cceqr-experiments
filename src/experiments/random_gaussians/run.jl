@@ -65,10 +65,11 @@ if !plot_only
             p_geqp3 = qr!(tmp, ColumnNorm()).p
 
             copy!(tmp, A)
-            p_cceqr, _, _, _ = cceqr!(tmp, rho = rho)
+            cceqr!(tmp, rho = rho)
 
             copy!(tmp, A)
             p_cceqr, _, _, _ = cceqr!(tmp, rho = rho, full = true)
+            p_cceqr          = p_cceqr[1:k]
 
             if(p_geqp3[1:k] != p_cceqr)
                 j = 1

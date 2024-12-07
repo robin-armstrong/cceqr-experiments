@@ -70,10 +70,11 @@ if !plot_only
 
         for (rho_idx, rho) in enumerate(rho_range)
             copy!(Vt, Psi)
-            p_cceqr, blocks, avg_b, act = cceqr!(Vt, rho = rho)
+            cceqr!(Vt, rho = rho)
 
             copy!(Vt, Psi)
             p_cceqr, blocks, avg_b, act = cceqr!(Vt, rho = rho, full = true)
+            p_cceqr                     = p_cceqr[1:m]
 
             if(p_geqp3[1:m] != p_cceqr)
                 j = 1
