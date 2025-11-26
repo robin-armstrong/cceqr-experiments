@@ -2,7 +2,7 @@
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "6a0f7f92eeee068053b6ec117b5baf26863b23a4"
+project_hash = "f5a7f9c80819d0da3a043392e6b64d2cc8dacd1f"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -46,6 +46,12 @@ deps = ["Colors"]
 git-tree-sha1 = "e81c509d2c8e49592413bfb0bb3b08150056c79d"
 uuid = "27a7e980-b3e6-11e9-2bcd-0b925532e340"
 version = "0.4.1"
+
+[[deps.AppleAccelerate]]
+deps = ["Libdl", "LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "9e14ac652fc91b20755445fe197bfcfb9c853b13"
+uuid = "13e28ba4-7ad8-5781-acae-3021b1ed3924"
+version = "0.4.5"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -750,6 +756,12 @@ version = "0.3.28"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.MKL]]
+deps = ["Artifacts", "Libdl", "LinearAlgebra", "Logging", "MKL_jll"]
+git-tree-sha1 = "18b02c359c1150bf182978e18dbd9ce7ccc860af"
+uuid = "33e6dc65-8f57-5167-99aa-e5a354878fb2"
+version = "0.7.0"
 
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]

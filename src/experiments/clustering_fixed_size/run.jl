@@ -1,3 +1,5 @@
+include("../../config/config.jl")
+
 using LinearAlgebra
 using CairoMakie
 using StatsBase
@@ -259,7 +261,7 @@ end
 L = 1.2
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (600, 300))
+fig = Figure(size = (600, 300), fonts = (; regular = regfont))
 
 cdf = Axis(fig[1,1],
            xlabel             = L"\text{Column Norm Quantile}",

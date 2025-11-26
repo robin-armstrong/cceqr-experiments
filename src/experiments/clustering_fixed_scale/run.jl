@@ -1,3 +1,5 @@
+include("../../config/config.jl")
+
 using LinearAlgebra
 using CairoMakie
 using StatsBase
@@ -251,7 +253,7 @@ time_comp_cpqr = geqp3_median.*cceqr_median_cpqr.^(-1)
 L = 1
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (600, 300))
+fig = Figure(size = (600, 300), fonts = (; regular = regfont))
 
 time_cssp = Axis(fig[1,1],
                  title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (CSSP Only)",

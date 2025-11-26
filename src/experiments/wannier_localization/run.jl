@@ -1,3 +1,5 @@
+include("../../config/config.jl")
+
 using LinearAlgebra
 using CairoMakie
 using StatsBase
