@@ -142,9 +142,10 @@ time = Axis(fig[1,1],
             yminorticks        = IntervalsBetween(10)
            )
 
-scatterlines!(time, rho_range, cceqr_median_cssp, color = :blue, marker = :diamond, label = L"\text{CCEQR (CSSP only)}")
-scatterlines!(time, rho_range, cceqr_median_cpqr, color = :green, marker = :circle, label = L"\text{CCEQR (full CPQR)}")
-hlines!(time, geqp3_median_times, color = :red, linestyle = :dash, label = L"\text{GEQP3}")
+scatterlines!(time, rho_range, cceqr_median_cssp, color = :blue, marker = :diamond, label = "CCEQR (CSSP only)")
+scatterlines!(time, rho_range, cceqr_median_cpqr, color = :transparent, strokecolor = :green, strokewidth = 2, linewidth = 2, marker = :circle, markersize = 15, label = "CCEQR (full CPQR)")
+lines!(time, rho_range, cceqr_median_cpqr, color = :green)
+hlines!(time, geqp3_median_times, color = :red, linestyle = :dash, label = "GEQP3")
 axislegend(time, position = :lt)
 
 cycles = Axis(fig[1,2],

@@ -223,10 +223,10 @@ end
 @load destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (400, 1200), fonts = (; regular = regfont))
+fig = Figure(size = (500, 1000), fonts = (; regular = regfont))
 
 m_plot = Axis(fig[1,1],
-              xlabel             = "Number of Rows ("*string(n_fixed)*" Columns)",
+              xlabel             = "Number of Rows ("*string(n_fixed)*" Columns, ρ = "*string(rho_fixed)*")",
               xscale             = log10,
               xminorticksvisible = true,
               xminorgridvisible  = true,
@@ -239,17 +239,18 @@ m_plot = Axis(fig[1,1],
 
 cceqr_cssp_median = vec(median(data_m["cceqr_cssp"], dims = 2))
 cceqr_cpqr_median = vec(median(data_m["cceqr_cpqr"], dims = 2))
-geqp3_median      = vec(median(data_m["cceqr_cssp"], dims = 2))
+geqp3_median      = vec(median(data_m["geqp3"], dims = 2))
 
 scatterlines!(m_plot, m_range, cceqr_cssp_median, color = :blue, marker = :diamond, label = "CCEQR (CSSP Only)")
-scatterlines!(m_plot, m_range, cceqr_cpqr_median, color = :green, marker = :circle, label = "CCEQR (full CPQR)")
+scatterlines!(m_plot, m_range, cceqr_cpqr_median, color = :transparent, strokecolor = :green, strokewidth = 2, linewidth = 2, marker = :circle, markersize = 15, label = "CCEQR (full CPQR)")
+lines!(m_plot, m_range, cceqr_cpqr_median, color = :green)
 lines!(m_plot, m_range, geqp3_median, color = :red, linestyle = :dash, label = "GEQP3")
 lines!(m_plot, m_range, 5e-7*(m_range).^2, color = :black, linestyle = :dashdot, label = L"\mathcal{O}(m^2)\text{ (reference)}")
 
 axislegend(m_plot, position = :lt)
 
 n_plot = Axis(fig[2,1],
-              xlabel             = "Number of Columns ("*string(m_fixed)*" Rows)",
+              xlabel             = "Number of Columns ("*string(m_fixed)*" Rows, ρ = "*string(rho_fixed)*")",
               xscale             = log10,
               xminorticksvisible = true,
               xminorgridvisible  = true,
@@ -262,10 +263,11 @@ n_plot = Axis(fig[2,1],
 
 cceqr_cssp_median = vec(median(data_n["cceqr_cssp"], dims = 2))
 cceqr_cpqr_median = vec(median(data_n["cceqr_cpqr"], dims = 2))
-geqp3_median      = vec(median(data_n["cceqr_cssp"], dims = 2))
+geqp3_median      = vec(median(data_n["geqp3"], dims = 2))
 
 scatterlines!(n_plot, n_range, cceqr_cssp_median, color = :blue, marker = :diamond, label = "CCEQR (CSSP Only)")
-scatterlines!(n_plot, n_range, cceqr_cpqr_median, color = :green, marker = :circle, label = "CCEQR (full CPQR)")
+scatterlines!(n_plot, n_range, cceqr_cpqr_median, color = :transparent, strokecolor = :green, strokewidth = 2, linewidth = 2, marker = :circle, markersize = 15, label = "CCEQR (full CPQR)")
+lines!(n_plot, n_range, cceqr_cpqr_median, color = :green)
 lines!(n_plot, n_range, geqp3_median, color = :red, linestyle = :dash, label = "GEQP3")
 lines!(n_plot, n_range, 5e-7*n_range, color = :black, linestyle = :dashdot, label = L"\mathcal{O}(n)\text{ (reference)}")
 
@@ -278,19 +280,19 @@ rho_plot = Axis(fig[3,1],
                 xminorgridvisible  = true,
                 xminorticks        = IntervalsBetween(10),
                 ylabel             = "Runtime (s)",
-                yscale             = log10,
                 yminorticksvisible = true,
                 yminorgridvisible  = true,
                 yminorticks        = IntervalsBetween(10))
 
 cceqr_cssp_median = vec(median(data_rho["cceqr_cssp"], dims = 2))
 cceqr_cpqr_median = vec(median(data_rho["cceqr_cpqr"], dims = 2))
-geqp3_median      = median(data_rho["cceqr_cssp"])
+geqp3_median      = median(data_rho["geqp3"])
 
 scatterlines!(rho_plot, rho_range, cceqr_cssp_median, color = :blue, marker = :diamond, label = "CCEQR (CSSP Only)")
-scatterlines!(rho_plot, rho_range, cceqr_cpqr_median, color = :green, marker = :circle, label = "CCEQR (full CPQR)")
+scatterlines!(rho_plot, rho_range, cceqr_cpqr_median, color = :transparent, strokecolor = :green, strokewidth = 2, linewidth = 2, marker = :circle, markersize = 15, label = "CCEQR (full CPQR)")
+lines!(rho_plot, rho_range, cceqr_cpqr_median, color = :green)
 hlines!(rho_plot, geqp3_median, color = :red, linestyle = :dash, label = "GEQP3")
 
-axislegend(rho_plot, position = :lt)
+axislegend(rho_plot, position = :lb)
 
 save(destination*"_plot.pdf", fig)
