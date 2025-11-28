@@ -224,7 +224,7 @@ end
 @load destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (500, 1000), fonts = (; regular = regfont))
+fig = Figure(size = (600, 900), fonts = (; regular = regfont))
 
 m_plot = Axis(fig[1,1],
               xlabel             = "Number of Rows ("*string(n_fixed)*" Columns, ρ = "*string(rho_fixed)*")",

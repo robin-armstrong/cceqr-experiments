@@ -127,16 +127,16 @@ tmin               = .8*min(geqp3_median_times, minimum(cceqr_median_cssp), mini
 tmax               = 1.5*max(geqp3_median_times, maximum(cceqr_median_cssp), maximum(cceqr_median_cpqr))
 
 CairoMakie.activate!(visible = false, type = "pdf")
-fig = Figure(size = (650, 325))
+fig = Figure(size = (650, 325), fonts = (; regular = regfont))
 
 time = Axis(fig[1,1],
             limits             = (nothing, nothing, tmin, tmax),
-            xlabel             = L"$\rho$",
+            xlabel             = "ρ",
             xminorticksvisible = true,
             xminorgridvisible  = true,
             xminorticks        = IntervalsBetween(10),
             xscale             = log10,
-            ylabel             = L"\text{Runtime (s)}",
+            ylabel             = "Runtime (s)",
             yminorticksvisible = true,
             yminorgridvisible  = true,
             yminorticks        = IntervalsBetween(10)
@@ -149,12 +149,12 @@ hlines!(time, geqp3_median_times, color = :red, linestyle = :dash, label = "GEQP
 axislegend(time, position = :lt)
 
 cycles = Axis(fig[1,2],
-              xlabel             = L"$\rho$",
+              xlabel             = "ρ",
               xminorticksvisible = true,
               xminorgridvisible  = true,
               xminorticks        = IntervalsBetween(10),
               xscale             = log10,
-              ylabel             = L"\text{CCEQR Cycle Count}",
+              ylabel             = "CCEQR Cycle Count",
               yminorticksvisible = true,
               yminorgridvisible  = true,
               yminorticks        = IntervalsBetween(10)
