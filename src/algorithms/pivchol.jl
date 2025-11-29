@@ -4,8 +4,8 @@ using LinearAlgebra
 ### matrix given by K[i,j] = kfunc(norm(data[:, samp[i]] - data[:, samp[j]])),
 ### and kfunc defines a positive-definite kernel. The approximation factor X has
 ### dimension (n, d), where n = size(data, 2) and d is the approximation rank. This
-### function uses a partial Cholesky factorization with adaptive random pivoting;
-### see Chen, Epperly, Tropp, and Webber, 2023. All randomness is drawn from rng.
+### function uses a partial Cholesky factorization pivoting, much in the spirit
+### of Chen, Epperly, Tropp, and Webber, 2023, but deterministic.
 
 function pivchol!(d, data, kfunc, X)
     n     = size(data, 1)

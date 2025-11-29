@@ -7,6 +7,7 @@ using CCEQR
 using JLD2
 
 include("../../algorithms/adversary.jl")
+include("../../misc/fprints.jl")
 
 ##########################################################################
 ######################## SCRIPT PARAMETERS ###############################
@@ -18,7 +19,7 @@ n_range   = round.(Int64, exp2.(range(5, 20, 16)))
 n_fixed   = 1024
 rho_range = exp10.(range(-5, -.3, 20))
 rho_fixed = 1e-2
-numtrials = 10
+numtrials = 30
 readme    = "Comparing GEQP3 and CCEQR on Hadamard matrices of various sizes."
 
 plot_only   = false
@@ -28,193 +29,186 @@ destination = "src/experiments/hadamard/hadamard_test"
 ######################## DATA GENERATION #################################
 ##########################################################################
 
-if !plot_only
-    function fprintln(s)
-        println(s)
-        flush(stdout)
+function run_hadamard_experiment(m_range, m_fixed, n_range, n_fixed,
+                                    rho_range, rho_fixed, numtrials, readme,
+                                    destination)
+    # recording information about this experiment
+
+    logstr  = "m_range   = "*string(m_range)*"\n"
+    logstr *= "m_fixed   = "*string(m_fixed)*"\n"
+    logstr *= "n_range   = "*string(n_range)*"\n"
+    logstr *= "n_fixed   = "*string(n_fixed)*"\n"
+    logstr *= "rho_range = "*string(rho_range)*"\n"
+    logstr *= "rho_fixed = "*string(rho_fixed)*"\n"
+    logstr *= "numtrials = "*string(numtrials)*"\n"
+    logstr *= "\n"*readme*"\n"
+
+    logfile = destination*"_log.txt"
+    touch(logfile)
+    io = open(logfile, "w")
+    write(io, logstr)
+    close(io)
+
+    fprintln(logstr)
+
+    data_m   = Dict()
+    data_n   = Dict()
+    data_rho = Dict()
+
+    for alg in ["cceqr_cssp", "cceqr_cpqr", "geqp3"]
+        data_m[alg]   = zeros(length(m_range), numtrials)
+        data_n[alg]   = zeros(length(n_range), numtrials)
+        data_rho[alg] = zeros(length(rho_range), numtrials)
+    end
+    
+    total_trials  = numtrials*(length(m_range)+
+                                length(n_range)+
+                                length(rho_range))
+    trial_counter = 0
+
+    for (m_idx, m) in enumerate(m_range)
+        A   = adversary(m, n_fixed)
+        tmp = zeros(m, n_fixed)
+
+        fprintln("\nSHAPE "*string(size(A))*", "*
+                    "RHO = "*string(rho_fixed))
+        fprintln("--------------------")
+
+        copy!(tmp, A)
+        p_geqp3 = qr!(tmp, ColumnNorm()).p
+
+        copy!(tmp, A)
+        cceqr!(tmp, rho = rho_fixed)
+
+        copy!(tmp, A)
+        p_cceqr, _, _, _ = cceqr!(tmp, rho = rho_fixed, full = true)
+
+        if p_geqp3[1:min(m, n_fixed)] != p_cceqr[1:min(m, n_fixed)]
+            j = 1
+            while(p_geqp3[j] == p_cceqr[j]) j += 1 end
+
+            expected = p_geqp3[j]
+            got      = p_cceqr[j]
+
+            @save destination*"_failure_data.jld2" A rho_fixed j expected got
+            throw(error("incorrect permutation from cceqr"))
+        end
+
+        for trial_index = 1:numtrials
+            trial_counter += 1
+            fprintln("    trial "*string(trial_counter)*
+                        " of "*string(total_trials)*"...")
+
+            copy!(tmp, A)
+            data_m["geqp3"][m_idx, trial_index] = @elapsed qr!(tmp, ColumnNorm())
+
+            copy!(tmp, A)
+            data_m["cceqr_cssp"][m_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed)
+
+            copy!(tmp, A)
+            data_m["cceqr_cpqr"][m_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed, full = true)
+        end
+
+        @save destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
     end
 
-    function run_hadamard_experiment(m_range, m_fixed, n_range, n_fixed,
+    for (n_idx, n) in enumerate(n_range)
+        A   = adversary(m_fixed, n)
+        tmp = zeros(m_fixed, n)
+
+        fprintln("\nSHAPE "*string(size(A))*", "*
+                    "RHO = "*string(rho_fixed))
+        fprintln("--------------------")
+
+        copy!(tmp, A)
+        p_geqp3 = qr!(tmp, ColumnNorm()).p
+
+        copy!(tmp, A)
+        cceqr!(tmp, rho = rho_fixed)
+
+        copy!(tmp, A)
+        p_cceqr, _, _, _ = cceqr!(tmp, rho = rho_fixed, full = true)
+
+        if p_geqp3[1:min(m_fixed, n)] != p_cceqr[1:min(m_fixed, n)]
+            j = 1
+            while(p_geqp3[j] == p_cceqr[j]) j += 1 end
+
+            expected = p_geqp3[j]
+            got      = p_cceqr[j]
+
+            @save destination*"_failure_data.jld2" A rho_fixed j expected got
+            throw(error("incorrect permutation from cceqr"))
+        end
+
+        for trial_index = 1:numtrials
+            trial_counter += 1
+            fprintln("    trial "*string(trial_counter)*
+                        " of "*string(total_trials)*"...")
+
+            copy!(tmp, A)
+            data_n["geqp3"][n_idx, trial_index] = @elapsed qr!(tmp, ColumnNorm())
+
+            copy!(tmp, A)
+            data_n["cceqr_cssp"][n_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed)
+
+            copy!(tmp, A)
+            data_n["cceqr_cpqr"][n_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed, full = true)
+        end
+
+        @save destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
+    end
+
+    for (rho_idx, rho) in enumerate(rho_range)
+        A   = adversary(m_fixed, n_fixed)
+        tmp = zeros(m_fixed, n_fixed)
+
+        fprintln("\nSHAPE "*string(size(A))*" ,"*
+                    "RHO = "*string(rho))
+        fprintln("--------------------")
+
+        copy!(tmp, A)
+        p_geqp3 = qr!(tmp, ColumnNorm()).p
+
+        copy!(tmp, A)
+        cceqr!(tmp, rho = rho)
+
+        copy!(tmp, A)
+        p_cceqr, _, _, _ = cceqr!(tmp, rho = rho, full = true)
+        p_cceqr          = p_cceqr[1:n_fixed]
+
+        if p_geqp3[1:min(m_fixed, n_fixed)] != p_cceqr[1:min(m_fixed, n_fixed)]
+            j = 1
+            while(p_geqp3[j] == p_cceqr[j]) j += 1 end
+
+            expected = p_geqp3[j]
+            got      = p_cceqr[j]
+
+            @save destination*"_failure_data.jld2" A rho j expected got
+            throw(error("incorrect permutation from cceqr"))
+        end
+
+        for trial_index = 1:numtrials
+            trial_counter += 1
+            fprintln("    trial "*string(trial_counter)*
+                        " of "*string(total_trials)*"...")
+
+            copy!(tmp, A)
+            data_rho["geqp3"][rho_idx, trial_index] = @elapsed qr!(tmp, ColumnNorm())
+
+            copy!(tmp, A)
+            data_rho["cceqr_cssp"][rho_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho)
+
+            copy!(tmp, A)
+            data_rho["cceqr_cpqr"][rho_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho, full = true)
+        end
+
+        @save destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
+    end
+end
+
+plot_only || run_hadamard_experiment(m_range, m_fixed, n_range, n_fixed,
                                      rho_range, rho_fixed, numtrials, readme,
                                      destination)
-        # recording information about this experiment
-
-        logstr  = "m_range   = "*string(m_range)*"\n"
-        logstr *= "m_fixed   = "*string(m_fixed)*"\n"
-        logstr *= "n_range   = "*string(n_range)*"\n"
-        logstr *= "n_fixed   = "*string(n_fixed)*"\n"
-        logstr *= "rho_range = "*string(rho_range)*"\n"
-        logstr *= "rho_fixed = "*string(rho_fixed)*"\n"
-        logstr *= "numtrials = "*string(numtrials)*"\n"
-        logstr *= "\n"*readme*"\n"
-
-        logfile = destination*"_log.txt"
-        touch(logfile)
-        io = open(logfile, "w")
-        write(io, logstr)
-        close(io)
-
-        fprintln(logstr)
-
-        data_m   = Dict()
-        data_n   = Dict()
-        data_rho = Dict()
-
-        for alg in ["cceqr_cssp", "cceqr_cpqr", "geqp3"]
-            data_m[alg]   = zeros(length(m_range), numtrials)
-            data_n[alg]   = zeros(length(n_range), numtrials)
-            data_rho[alg] = zeros(length(rho_range), numtrials)
-        end
-        
-        total_trials  = numtrials*(length(m_range)+
-                                   length(n_range)+
-                                   length(rho_range))
-        trial_counter = 0
-
-        for (m_idx, m) in enumerate(m_range)
-            A   = adversary(m, n_fixed)
-            tmp = zeros(m, n_fixed)
-
-            fprintln("\nSHAPE "*string(size(A))*", "*
-                       "RHO = "*string(rho_fixed))
-            fprintln("--------------------")
-
-            copy!(tmp, A)
-            p_geqp3 = qr!(tmp, ColumnNorm()).p
-
-            copy!(tmp, A)
-            cceqr!(tmp, rho = rho_fixed)
-
-            copy!(tmp, A)
-            p_cceqr, _, _, _ = cceqr!(tmp, rho = rho_fixed, full = true)
-
-            if p_geqp3[1:min(m, n_fixed)] != p_cceqr[1:min(m, n_fixed)]
-                j = 1
-                while(p_geqp3[j] == p_cceqr[j]) j += 1 end
-
-                expected = p_geqp3[j]
-                got      = p_cceqr[j]
-
-                @save destination*"_failure_data.jld2" A rho_fixed j expected got
-                throw(error("incorrect permutation from cceqr"))
-            end
-
-            for trial_index = 1:numtrials
-                trial_counter += 1
-                fprintln("    trial "*string(trial_counter)*
-                         " of "*string(total_trials)*"...")
-
-                copy!(tmp, A)
-                data_m["geqp3"][m_idx, trial_index] = @elapsed qr!(tmp, ColumnNorm())
-
-                copy!(tmp, A)
-                data_m["cceqr_cssp"][m_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed)
-
-                copy!(tmp, A)
-                data_m["cceqr_cpqr"][m_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed, full = true)
-            end
-
-            @save destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
-        end
-
-        for (n_idx, n) in enumerate(n_range)
-            A   = adversary(m_fixed, n)
-            tmp = zeros(m_fixed, n)
-
-            fprintln("\nSHAPE "*string(size(A))*", "*
-                       "RHO = "*string(rho_fixed))
-            fprintln("--------------------")
-
-            copy!(tmp, A)
-            p_geqp3 = qr!(tmp, ColumnNorm()).p
-
-            copy!(tmp, A)
-            cceqr!(tmp, rho = rho_fixed)
-
-            copy!(tmp, A)
-            p_cceqr, _, _, _ = cceqr!(tmp, rho = rho_fixed, full = true)
-
-            if p_geqp3[1:min(m_fixed, n)] != p_cceqr[1:min(m_fixed, n)]
-                j = 1
-                while(p_geqp3[j] == p_cceqr[j]) j += 1 end
-
-                expected = p_geqp3[j]
-                got      = p_cceqr[j]
-
-                @save destination*"_failure_data.jld2" A rho_fixed j expected got
-                throw(error("incorrect permutation from cceqr"))
-            end
-
-            for trial_index = 1:numtrials
-                trial_counter += 1
-                fprintln("    trial "*string(trial_counter)*
-                         " of "*string(total_trials)*"...")
-
-                copy!(tmp, A)
-                data_n["geqp3"][n_idx, trial_index] = @elapsed qr!(tmp, ColumnNorm())
-
-                copy!(tmp, A)
-                data_n["cceqr_cssp"][n_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed)
-
-                copy!(tmp, A)
-                data_n["cceqr_cpqr"][n_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho_fixed, full = true)
-            end
-
-            @save destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
-        end
-
-        for (rho_idx, rho) in enumerate(rho_range)
-            A   = adversary(m_fixed, n_fixed)
-            tmp = zeros(m_fixed, n_fixed)
-
-            fprintln("\nSHAPE "*string(size(A))*" ,"*
-                       "RHO = "*string(rho))
-            fprintln("--------------------")
-
-            copy!(tmp, A)
-            p_geqp3 = qr!(tmp, ColumnNorm()).p
-
-            copy!(tmp, A)
-            cceqr!(tmp, rho = rho)
-
-            copy!(tmp, A)
-            p_cceqr, _, _, _ = cceqr!(tmp, rho = rho, full = true)
-            p_cceqr          = p_cceqr[1:n_fixed]
-
-            if p_geqp3[1:min(m_fixed, n_fixed)] != p_cceqr[1:min(m_fixed, n_fixed)]
-                j = 1
-                while(p_geqp3[j] == p_cceqr[j]) j += 1 end
-
-                expected = p_geqp3[j]
-                got      = p_cceqr[j]
-
-                @save destination*"_failure_data.jld2" A rho j expected got
-                throw(error("incorrect permutation from cceqr"))
-            end
-
-            for trial_index = 1:numtrials
-                trial_counter += 1
-                fprintln("    trial "*string(trial_counter)*
-                         " of "*string(total_trials)*"...")
-
-                copy!(tmp, A)
-                data_rho["geqp3"][rho_idx, trial_index] = @elapsed qr!(tmp, ColumnNorm())
-
-                copy!(tmp, A)
-                data_rho["cceqr_cssp"][rho_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho)
-
-                copy!(tmp, A)
-                data_rho["cceqr_cpqr"][rho_idx, trial_index] = @elapsed cceqr!(tmp, rho = rho, full = true)
-            end
-
-            @save destination*"_data.jld2" m_range m_fixed n_range n_fixed rho_range rho_fixed numtrials data_m data_n data_rho
-        end
-    end
-
-    run_hadamard_experiment(m_range, m_fixed, n_range, n_fixed,
-                            rho_range, rho_fixed, numtrials, readme,
-                            destination)
-end
 
 ##########################################################################
 ######################## PLOTTING ########################################
