@@ -33,8 +33,8 @@ function run_wannier_experiment(molecule, rho_range, rho_fixed, th_range,
     logstr  = "molecule  = "*molecule*"\n"
     logstr *= "rho_range = "*string(rho_range)*"\n"
     logstr *= "rho_fixed = "*string(rho_fixed)*"\n"
-    logstr *= "th_range   = "*string(th_range)*"\n"
-    logstr *= "th_fixed   = "*string(th_fixed)*"\n"
+    logstr *= "th_range  = "*string(th_range)*"\n"
+    logstr *= "th_fixed  = "*string(th_fixed)*"\n"
     logstr *= "numtrials = "*string(numtrials)*"\n"
     logstr *= "\n"*readme*"\n"
 
@@ -211,7 +211,7 @@ geqp3_median_times = vec(median(geqp3_vsth, dims = 2))
 
 threads = Axis(fig[2,1:2],
                width              = Relative(0.5),
-               xlabel             = "BLAS/LAPACK Threads",
+               xlabel             = "BLAS Threads (ρ = "*string(rho_fixed)*")",
                xticks             = 2:2:maximum(th_range),
                ylabel             = "Runtime (s)",
                yminorticksvisible = true,
