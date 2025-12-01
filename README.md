@@ -6,9 +6,11 @@ To begin working with this code, run the following in a Bash terminal:
 ```
 git clone https://github.com/robin-armstrong/cceqr-experiments.git
 cd cceqr-experiments
-$JULIA
+cp src/config/config_template.jl src/config/config.jl
 ```
-where `JULIA` is the path to a Julia executable. Once in a Julia terminal, enter the following commands:
+Optionally, you can modify `src/config/config.jl` to change the BLAS/LAPACK implementation or change plotting fonts.
+
+After running the commands above, open a Julia terminal at the top level directory. Enter the following commands:
 ```
 import Pkg; Pkg.activate(".")
 Pkg.instantiate()
