@@ -237,17 +237,17 @@ geqp3_median      = median(geqp3_time, dims = 2)*ones(1, length(rho_range))
 cceqr_median_cssp = reshape(cceqr_median_cssp, (length(nrange), length(rho_range)))
 cceqr_median_cpqr = reshape(cceqr_median_cpqr, (length(nrange), length(rho_range)))
 
-time_comp_cssp = geqp3_median.*cceqr_median_cssp.^(-1)
-time_comp_cpqr = geqp3_median.*cceqr_median_cpqr.^(-1)
+time_comp_cssp = cceqr_median_cssp./geqp3_median
+time_comp_cpqr = cceqr_median_cpqr./geqp3_median
 
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (600, 300), fonts = (; regular = regfont))
 
-Lmax = 5
-Lmin = exp10(-log10(5))
+Lmax = 9
+Lmin = exp2(-log2(9))
 
 time_cssp = Axis(fig[1,1],
-                 title       = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (CSSP Only)",
+                 title       = L"$T_\mathrm{CCEQR}/T_\mathrm{GEQP3}$ (CSSP Only)",
                  xlabel      = "ρ",
                  xticks      = [-5, -4, -3, -2, -1],
                  xtickformat = xvals -> [L"10^{%$x}" for x in Int.(xvals)],
@@ -259,7 +259,7 @@ time_cssp = Axis(fig[1,1],
 heatmap!(time_cssp, log10.(rho_range), log10.(nrange), transpose(time_comp_cssp), colormap = :vik, colorscale = log2, colorrange = (Lmin, Lmax))
 
 time_cpqr = Axis(fig[1,2],
-                 title       = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (Full CPQR)",
+                 title       = L"$T_\mathrm{CCEQR}/T_\mathrm{GEQP3}$ (Full CPQR)",
                  xlabel      = "ρ",
                  xticks      = [-5, -4, -3, -2, -1],
                  xtickformat = xvals -> [L"10^{%$x}" for x in Int.(xvals)],
@@ -269,6 +269,6 @@ time_cpqr = Axis(fig[1,2],
                 )
 
 heatmap!(time_cpqr, log10.(rho_range), log10.(nrange), transpose(time_comp_cpqr), colormap = :vik, colorscale = log2, colorrange = (Lmin, Lmax))
-Colorbar(fig[1,3], colormap = :vik, scale = log2, limits = (Lmin, Lmax))
+Colorbar(fig[1,3], colormap = :vik, scale = log2, ticks = exp2.(-3:3), tickformat = vals -> [L"2^{%$i}" for i in Int.(log2.(vals))], limits = (Lmin, Lmax))
 
 save(destination*"_plot.pdf", fig)

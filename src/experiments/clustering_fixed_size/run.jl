@@ -238,8 +238,8 @@ geqp3_median      = median(geqp3_time)
 cceqr_median_cssp = reshape(cceqr_median_cssp, (length(srange), length(rho_range)))
 cceqr_median_cpqr = reshape(cceqr_median_cpqr, (length(srange), length(rho_range)))
 
-time_comp_cssp = geqp3_median*cceqr_median_cssp.^(-1)
-time_comp_cpqr = geqp3_median*cceqr_median_cpqr.^(-1)
+time_comp_cssp = cceqr_median_cssp/geqp3_median
+time_comp_cpqr = cceqr_median_cpqr/geqp3_median
 
 colnrm_cdf = zeros(size(sq_colnorms))
 
@@ -278,7 +278,7 @@ Lmax = 8
 Lmin = .125
 
 time_cssp = Axis(fig[1,2],
-                 title       = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (CSSP Only)",
+                 title       = L"$T_\mathrm{CCEQR}/T_\mathrm{GEQP3}$ (CSSP Only)",
                  xlabel      = "ρ",
                  xticks      = [-5, -4, -3, -2, -1],
                  xtickformat = xvals -> [L"10^{%$x}" for x in Int.(xvals)],

@@ -239,7 +239,6 @@ scatterlines!(m_plot, m_range, cceqr_cssp_median, color = :blue, marker = :diamo
 scatterlines!(m_plot, m_range, cceqr_cpqr_median, color = :transparent, strokecolor = :green, strokewidth = 2, linewidth = 2, marker = :circle, markersize = 15, label = "CCEQR (full CPQR)")
 lines!(m_plot, m_range, cceqr_cpqr_median, color = :green)
 lines!(m_plot, m_range, geqp3_median, color = :red, linestyle = :dash, label = "GEQP3")
-lines!(m_plot, m_range, 5e-7*(m_range).^2, color = :black, linestyle = :dashdot, label = L"\mathcal{O}(m^2)\text{ (reference)}")
 
 axislegend(m_plot, position = :lt)
 

@@ -21,7 +21,7 @@ th_fixed  = 8
 numtrials = 30
 
 plot_only   = false      # if "true" then data will be read from disk and not regenerated
-destination = "src/experiments/wannier_localization/alkane"
+destination = "src/experiments/wannier_localization/water"
 readme      = "Comparing GEQP3 and CCEQR on the alkane example."
 
 ##########################################################################
