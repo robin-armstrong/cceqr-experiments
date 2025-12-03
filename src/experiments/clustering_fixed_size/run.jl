@@ -247,17 +247,15 @@ for i = 1:size(colnrm_cdf, 1)
     colnrm_cdf[i,:] = cumsum(sort(sq_colnorms[i,:]))/k
 end
 
-L = 1.2
-
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (600, 300), fonts = (; regular = regfont))
 
 cdf = Axis(fig[1,1],
-           xlabel             = L"\text{Column Norm Quantile}",
+           xlabel             = "Column Norm Quantile",
            xminorticksvisible = true,
            xminorgridvisible  = true,
            xminorticks        = IntervalsBetween(5),
-           ylabel             = L"\text{Column Norm CDF}",
+           ylabel             = "Column Norm CDF",
            yminorticksvisible = true,
            yminorgridvisible  = true,
            yminorticks        = IntervalsBetween(5)
@@ -276,13 +274,19 @@ scatter!(cdf, scatter_idx/n, colnrm_cdf[8,scatter_idx], color = :blue, marker = 
 scatter!(cdf, scatter_idx/n, colnrm_cdf[10,scatter_idx], color = :green, marker = :dtriangle, label = L"\ell = 10")
 axislegend(cdf, position = :lt)
 
-time_cssp = Axis(fig[1,2],
-                 title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (CSSP Only)",
-                 xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = L"$\text{Cluster Separation } (\ell)$"
-                )
-heatmap!(time_cssp, log10.(rho_range), srange, transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = (-L, L))
+Lmax = 8
+Lmin = .125
 
-Colorbar(fig[1,3], colormap = :vik, limits = (-L, L))
+time_cssp = Axis(fig[1,2],
+                 title       = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (CSSP Only)",
+                 xlabel      = "ρ",
+                 xticks      = [-5, -4, -3, -2, -1],
+                 xtickformat = xvals -> [L"10^{%$x}" for x in Int.(xvals)],
+                 ylabel      = "Cluster Separation (ℓ)"
+                )
+
+heatmap!(time_cssp, log10.(rho_range), srange, transpose(time_comp_cssp), colormap = :vik, colorscale = log2, colorrange = (Lmin, Lmax))
+
+Colorbar(fig[1,3], colormap = :vik, scale = log2, limits = (Lmin, Lmax))
 
 save(destination*"_plot.pdf", fig)

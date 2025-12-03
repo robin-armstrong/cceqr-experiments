@@ -240,24 +240,35 @@ cceqr_median_cpqr = reshape(cceqr_median_cpqr, (length(nrange), length(rho_range
 time_comp_cssp = geqp3_median.*cceqr_median_cssp.^(-1)
 time_comp_cpqr = geqp3_median.*cceqr_median_cpqr.^(-1)
 
-L = 1
-
 CairoMakie.activate!(visible = false, type = "pdf")
 fig = Figure(size = (600, 300), fonts = (; regular = regfont))
 
+Lmax = 5
+Lmin = exp10(-log10(5))
+
 time_cssp = Axis(fig[1,1],
-                 title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (CSSP Only)",
-                 xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = L"Dataset Size ($\log_{10} n$)",
+                 title       = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (CSSP Only)",
+                 xlabel      = "ρ",
+                 xticks      = [-5, -4, -3, -2, -1],
+                 xtickformat = xvals -> [L"10^{%$x}" for x in Int.(xvals)],
+                 ylabel      = "Dataset Size",
+                 yticks      = [1, 2, 3, 4, 5, 6],
+                 ytickformat = yvals -> [L"10^{%$y}" for y in Int.(yvals)]
                 )
-heatmap!(time_cssp, log10.(rho_range), log10.(nrange), transpose(log10.(time_comp_cssp)), colormap = :vik, colorrange = (-L, L))
+
+heatmap!(time_cssp, log10.(rho_range), log10.(nrange), transpose(time_comp_cssp), colormap = :vik, colorscale = log2, colorrange = (Lmin, Lmax))
 
 time_cpqr = Axis(fig[1,2],
-                 title  = L"$\log_{10}(T_\mathrm{GEQP3}/T_\mathrm{CCEQR})$ (Full CPQR)",
-                 xlabel = L"$\log_{10} \,\rho$",
-                 ylabel = L"Dataset Size ($\log_{10} n$)",
+                 title       = L"$T_\mathrm{GEQP3}/T_\mathrm{CCEQR}$ (Full CPQR)",
+                 xlabel      = "ρ",
+                 xticks      = [-5, -4, -3, -2, -1],
+                 xtickformat = xvals -> [L"10^{%$x}" for x in Int.(xvals)],
+                 ylabel      = "Dataset Size",
+                 yticks      = [1, 2, 3, 4, 5, 6],
+                 ytickformat = yvals -> [L"10^{%$y}" for y in Int.(yvals)]
                 )
-heatmap!(time_cpqr, log10.(rho_range), log10.(nrange), transpose(log10.(time_comp_cpqr)), colormap = :vik, colorrange = (-L, L))
-Colorbar(fig[1,3], colormap = :vik, limits = (-L, L))
+
+heatmap!(time_cpqr, log10.(rho_range), log10.(nrange), transpose(time_comp_cpqr), colormap = :vik, colorscale = log2, colorrange = (Lmin, Lmax))
+Colorbar(fig[1,3], colormap = :vik, scale = log2, limits = (Lmin, Lmax))
 
 save(destination*"_plot.pdf", fig)
